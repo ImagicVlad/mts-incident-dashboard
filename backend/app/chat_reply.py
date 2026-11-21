@@ -4,45 +4,83 @@ import re
 from datetime import datetime, timedelta
 from typing import Literal
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, ValidationError
 
 from .domain import OPEN
 
 
 CHAT_PROMPT = """
-Ответь JSON-объектом {view, scope, text, ids, includeRelations, allRelations}. Пользователь видит обычный текст и отдельные
-строки записей, которые сервер сам заполняет из JSON. text — прямой ответ на русском без
-Markdown, HTML и перечней ID. Не перечисляй реквизиты, уже видимые в строках.
-view: count — сколько записей; nearest — ближайший предстоящий срок; overview — обзор смены;
-list — перечень; relations — поиск возможной связи; detail — подробности конкретной записи;
-text — любой другой вопрос. Для detail дай содержательный ответ по описанию, решению и стадии.
-scope: all — вся выборка; critical, high, assigned, review, history — очереди; overdue — активные
-просроченные; selected — только записи, отобранные тобой по более узкому вопросу.
-Для count, list или nearest без ограничений используй all. Для обзора используй all.
-Для полной очереди укажи её scope, сервер возьмёт все записи, даже за пределами selection.
-ids — массив точных номеров из снимка в порядке релевантности для selected, detail и text.
-Для detail включи запрошенную запись. Для relations без ограничений используй all, для
-проверки конкретных записей — selected и их номера. Связи и объяснения вычисляет сервер.
-«Что требует внимания в первую очередь?» — overview, scope=all. «Какие сейчас критические?» —
-list, scope=critical. «Какие инциденты на координаторах?» — list, scope=assigned.
-Если вместе с обзором спрашивают о связях, используй overview и includeRelations=true.
-Для отдельного вопроса о связях используй relations. allRelations=true только при явной просьбе
-показать все связи. Для обычного запроса очереди не добавляй связи.
-В count, nearest, relations сервер сам формирует фактический вывод. Не суммируй размеры
-пересекающихся очередей. Учитывай предыдущие реплики для уточняющих вопросов.
+Ты — собеседник и помощник дежурного координатора МТС. Отвечай по-русски. Для приветствия, «Как дела?»,
+общего разговора или объяснения понятия просто ответь человеку. Не превращай беседу в сводку смены.
+У тебя есть функция lookup_incidents. САМ вызывай её для любого вопроса о фактическом состоянии смены:
+записей в сообщении пользователя быть не должно, их прочитает функция. Никогда не проси пользователя вызвать её.
+Ниже описан запрос к функции. text — необязательное краткое введение, например «Этими инцидентами занимаются:».
+lookup_incidents возвращает актуальные результаты, не придумывай числа и ID. Не выдавай внутренние имена полей.
+Если спрашивают, какие именно инциденты в категории — возвращай сам перечень (display=list, scope этой категории).
+Кто решает, кто занимается — display=owners. Эти вопросы требуют строк каждой записи, одного числа недостаточно.
+Только «сколько» требует подсчёта. «Какие из них» применяет фильтр к предыдущему перечню, сохраняя строки.
+Для общего вопроса о рабочей обстановке (какие вообще есть проблемы, какие задачи в целом) запрашивай
+operation=overview. Для точного числа — operation=count и scope. Идентификаторы полей функции:
+scope: all (по умолчанию), active (Assigned и WorkInProgress), critical, high, assigned, review,
+history, previous (точный упорядоченный результат последнего предметного ответа).
+ids: точные ID для отбора; position: порядковый номер с единицы в previous, например для «второй»;
+search: буквальный фрагмент названия, продукта, команды или описания; overdue: true — только активные с нарушенным SLA.
+operation: overview (рабочая обстановка, все четыре очереди), count (точное число), nearest (ближайший ещё не наступивший срок), relations (проверить связь).
+display: list — запрошенный перечень, owners — кто отвечает, priority — только запрос порядка действий,
+ids — пользователь просил исключительно номера, text — без карточек. При запросе перечня с числом N задай limit=N,
+при явном «покажи все» задай showAll=true. Число результатов по умолчанию не ограничено.
+withRelations=true — если вместе с перечнем нужны связи, allRelations=true — если явно просят все связи.
+analyze=true — получить факты и затем подробно ответить о записи, причинах, сравнении или дать рекомендации.
+Для вопроса «почему они связаны» анализируй записи предыдущей пары. Для ответа об отдельных записях
+по данным используй query, не угадывай. Для действий используй display=priority и анализ.
+Если запрос однозначно продолжает перечень, используй previous. При неоднозначности уточни словами.
+Поле text — собственный естественный ответ или введение к запрошенному перечню. В нём можно поставить
+{count} для проверенного размера выборки. Вычисления выполняет сервер. Не перечисляй ID вместо ответа.
+"""
+
+ANALYSIS_PROMPT = """
+Ответь на последний вопрос своими словами на русском. Ты получил результат запроса к актуальным данным.
+JSON {"text":"ответ"}. Отвечай по существу, сохраняй смысл истории. Только подтверждённые ID и факты
+из selection, groups, counts и relations. null означает отсутствие сведений. Для ссылки упомяни ID,
+интерфейс добавит название. Не выдумывай названий. Различай наблюдение, предположение и действие.
+Про порядок действий объясни, за какую запись взяться, почему (влияние, оставшееся время, передача),
+что проверить дальше. Владелец и исполнитель — разные поля. Research — разбор причин уже устранённого сбоя.
+Если вопрос о связях, обоснуй гипотезу симптомами обеих записей и предложи проверку. Если нет кандидатов,
+скажи, чего не хватает. Не утверждай общую причину. Избегай повторения карточек и служебных меток.
+"""
+
+OVERVIEW_PROMPT = """
+Ответь на последний вопрос одним небольшим абзацем, 2–3 предложения. JSON {"text":"ответ"}.
+Опиши, чем заняться смене, по четырём очередям из workload, включая пустые. Очереди пересекаются.
+Счётчики рассчитаны сервером. Клиенту нужен смысл происходящего. При необходимости приведи один пример.
+Не перечисляй записи, названия технических полей и сведения, о которых пользователь не спрашивал.
 """
 
 GROUP_NAMES = {"critical": "Критические", "high": "Высокий приоритет", "assigned": "На координаторах",
                "review": "Исследование", "history": "История решённых"}
 
+Display = Literal["text", "list", "owners", "priority", "ids"]
 
-class ModelReply(BaseModel):
-    view: Literal["count", "nearest", "overview", "list", "relations", "detail", "text"]
-    scope: Literal["all", "critical", "high", "assigned", "review", "history", "overdue", "selected"] = "all"
-    text: str = ""
-    ids: list[str] = Field(default_factory=list)
-    includeRelations: bool = False
+
+class Query(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    scope: Literal["all", "active", "critical", "high", "assigned", "review", "history", "previous"] = "all"
+    ids: list[str] | None = None
+    position: int | None = Field(default=None, ge=1)
+    search: str = ""
+    overdue: bool = False
+    operation: Literal["count", "nearest", "relations", "overview"] | None = Field(default=None, description="Оставь пустым для списков, ответственных, подробностей и рекомендаций. count только для вопроса о числе; overview только для общей обстановки по всем очередям.")
+    display: Display = Field(default="text", description="Какие записи? list. Кто отвечает (команда или человек)? owners. Что делать первым? priority. Объяснение одной проблемы или общий обзор? text.")
+    limit: int | None = Field(default=None, ge=1)
+    showAll: bool = False
+    withRelations: bool = False
     allRelations: bool = False
+    analyze: bool = False
+
+
+class ChatPlan(BaseModel):
+    text: str = Field(default="", validation_alias=AliasChoices("text", "answer"))
+    query: Query | None = None
 
 
 class Relation(BaseModel):
@@ -57,6 +95,9 @@ class ChatContent(BaseModel):
     total: int | None = None
     metric: Literal["auto", "sla", "status"] = "auto"
     stats: dict[str, int] = Field(default_factory=dict)
+    display: Display = "text"
+    references: list[str] = Field(default_factory=list)
+    showAll: bool = False
 
 
 # Positive observations of the same failure family. A shared service or team alone is too weak.
@@ -71,6 +112,7 @@ SYMPTOMS = {
         r"\b(?:двойно\w* начислен\w*|повторн\w* начислен\w*|начисления [^.]{0,24}дважды)\b",
 }
 SIGNALS = [(reason, re.compile(pattern, re.I)) for reason, pattern in SYMPTOMS.items()]
+NETWORK_PATH = re.compile(r"\b(?:агрегаци\w*|межузлов\w*|vpn[- ]канал\w*|маршрутизатор\w*)", re.I)
 FAILURE = re.compile(r"\b(?:недоступ\w*|теря\w*|прерва\w*|потер\w*|дублир\w*|завис\w*|ист[её]к\w*|отказ\w*|таймаут\w*)\b", re.I)
 UNCONFIRMED = re.compile(r"\b(?:нет|без|исключены|отсутствуют|не выявлены|не обнаружены|"
                          r"проверить|проверяется|возможны|подозрение на)\s*$", re.I)
@@ -93,6 +135,11 @@ def _signals(row: dict) -> set[str]:
     return observed
 
 
+def _mentions_network_path(row: dict) -> bool:
+    description = " ".join(row.get(k) or "" for k in ("header", "shortDescription", "description"))
+    return bool(NETWORK_PATH.search(description))
+
+
 def possible_relations(rows: list[dict], focus: set[str], show_all: bool = False) -> list[Relation]:
     timed = sorted(((datetime.fromisoformat(r["submitDate"]), r, signs) for r in rows
                     if r.get("submitDate") and (signs := _signals(r))), key=lambda pair: (pair[0], pair[1]["id"]))
@@ -109,9 +156,13 @@ def possible_relations(rows: list[dict], focus: set[str], show_all: bool = False
                 continue
             service_key = "serviceId" if a.get("serviceId") and b.get("serviceId") else "service"
             same_service = bool(a.get(service_key) and a[service_key] == b.get(service_key))
-            candidates.append((-len(common), not same_service, gap, ids, min(common)))
+            same_product = bool(a.get("productName") and a["productName"] == b.get("productName"))
+            path_evidence = any("сетевого трафика" in reason for reason in common) and _mentions_network_path(a) and _mentions_network_path(b)
+            if not (len(common) > 1 or same_service or same_product or path_evidence):
+                continue
+            candidates.append((-len(common), not same_service, not path_evidence, gap, ids, min(common)))
     ranked = sorted(candidates)
-    return [Relation(ids=list(ids), reason=reason) for _, _, _, ids, reason in (ranked if show_all else ranked[:1])]
+    return [Relation(ids=list(ids), reason=reason) for *_, ids, reason in (ranked if show_all else ranked[:1])]
 
 
 def plain_reply(text: str, known: dict[str, dict]) -> tuple[str, list[str]]:
@@ -124,9 +175,9 @@ def plain_reply(text: str, known: dict[str, dict]) -> tuple[str, list[str]]:
     lines = []
     for line in text.splitlines():
         matches = list(pattern.finditer(line))
-        ids.extend(known_keys[m[0].casefold()] for m in matches if m[0].casefold() in known_keys)
         if any(m[0].casefold() not in known_keys for m in matches):
             continue
+        ids.extend(known_keys[m[0].casefold()] for m in matches)
         if matches and not re.search(r"[^\W\d_]", pattern.sub("", line)):
             continue
         if len(matches) > 1:
@@ -137,98 +188,109 @@ def plain_reply(text: str, known: dict[str, dict]) -> tuple[str, list[str]]:
     return "\n".join(lines).strip(), list(dict.fromkeys(ids))
 
 
-def chat_content(raw: str, snapshot: dict) -> ChatContent:
-    rows = {row["id"]: row for row in snapshot["incidents"]}
-    groups = snapshot["groups"]
-    now = datetime.fromisoformat(snapshot["serverTime"])
-    due = {key: datetime.fromisoformat(row["deadline"]) for key, row in rows.items()
-           if row["stateEnum"] in OPEN and row.get("deadline")}
-    overdue = [key for key in sorted(due, key=due.get) if due[key] < now]
+def read_plan(raw: str) -> ChatPlan:
     raw = re.sub(r"^\s*```(?:json)?\s*|\s*```\s*$", "", raw, flags=re.I).strip()
+    if not raw.startswith(("{", "[")):
+        return ChatPlan(text=raw)
     try:
-        data = json.loads(raw)
-    except ValueError:
-        data = None
-    try:
-        plan = ModelReply.model_validate(data)
+        return ChatPlan.model_validate_json(raw)
     except ValidationError:
-        # Never dump a broken JSON envelope into the conversation.
-        fallback = data.get("text", data.get("answer", "")) if isinstance(data, dict) else raw
-        if not isinstance(fallback, str) or fallback.lstrip().startswith(("{", "[")):
-            fallback = ""
-        text, ids = plain_reply(fallback, rows)
-        return ChatContent(answer=text or ("Записи из ответа:" if ids else "Не удалось разобрать ответ. Уточните вопрос."),
-                           incidents=ids, total=len(ids) if ids else None)
+        try:
+            data = json.loads(raw)
+        except ValueError:
+            data = {}
+        if isinstance(data, dict) and "query" in data:
+            raise
+        prose = data.get("text", data.get("answer")) if isinstance(data, dict) else None
+        return ChatPlan(text=prose if isinstance(prose, str) else "")
 
-    text, mentioned = plain_reply(plan.text, rows)
-    selected = list(dict.fromkeys(i for i in [*plan.ids, *mentioned] if i in rows))
-    if plan.scope == "selected":
-        scope = selected
-    elif plan.scope == "overdue":
-        scope = overdue
-    elif plan.scope in groups:
-        scope = groups[plan.scope]
+
+def prose_answer(text: str, rows: dict[str, dict]) -> ChatContent:
+    prose, refs = plain_reply(text, rows)
+    # Give standalone references a verified title. Keep prose intact when the title is already present.
+    for key in refs:
+        title = rows[key].get("header")
+        if title and key in prose and title.casefold() not in prose.casefold():
+            prose = re.sub(r"(?<![\w-])" + re.escape(key) + r"(?![\w-])",
+                           lambda _: f"«{title}» ({key})", prose, count=1)
+    bare = [key for key in refs if key not in prose]
+    return ChatContent(answer=prose or ("Вот эти записи." if bare else "Уточните, пожалуйста, вопрос."),
+                       references=refs, incidents=bare, display="list" if bare else "text")
+
+
+def select_records(query: Query, snapshot: dict, previous: list[str]) -> tuple[list[str], int]:
+    rows = {r["id"]: r for r in snapshot["incidents"]}
+    active = {key for key, row in rows.items() if row["stateEnum"] in OPEN}
+    now = datetime.fromisoformat(snapshot["serverTime"])
+    due = {key: datetime.fromisoformat(rows[key]["deadline"]) for key in active if rows[key].get("deadline")}
+    groups = snapshot["groups"]
+    if query.scope == "previous" or query.position is not None:
+        ids = previous
+    elif query.scope in groups:
+        ids = groups[query.scope]
     else:
-        ordered = [i for group in GROUP_NAMES for i in groups[group]]
-        scope = list(dict.fromkeys(ordered + list(rows)))
+        ids = [key for key in rows if query.scope != "active" or key in active]
+    if query.position is not None:
+        ids = ids[query.position - 1:query.position]
+    if query.ids is not None:
+        allowed = set(ids)
+        canonical = {key.casefold(): key for key in allowed}
+        ids = [canonical[key.casefold()] for key in query.ids if key.casefold() in canonical]
+    ids = list(dict.fromkeys(key for key in ids if key in rows))
+    if query.search.strip():
+        needle = query.search.strip().casefold()
+        fields = ("header", "productName", "assignedGroupName", "assignedEmployee", "service", "shortDescription", "description")
+        ids = [key for key in ids if any(needle in (rows[key].get(f) or "").casefold() for f in fields)]
+    if query.overdue:
+        ids = [key for key in ids if key in due and due[key] < now]
+    if query.operation == "nearest":
+        ids = sorted((key for key in ids if key in due and due[key] >= now), key=due.get)[:1]
+    if query.display == "priority":
+        critical, assigned = set(groups["critical"]), set(groups["assigned"])
+        ids = [key for key in ids if key in active or key in assigned]
+        ids.sort(key=lambda key: (key not in critical, key not in due or due[key] >= now, key not in active,
+                                  -(rows[key].get("priorityId") or 0), key not in assigned,
+                                  key not in due, due.get(key), key))
+    return ids[:query.limit], len(ids)
 
-    if plan.view == "count":
-        if plan.scope == "all":
-            text = f"Всего уникальных инцидентов: {len(rows)}."
-        else:
-            label = GROUP_NAMES.get(plan.scope, "Просроченные" if plan.scope == "overdue" else "По запросу")
-            text = f"{label}: {len(scope)}."
-        return ChatContent(answer=text, total=len(scope))
-    if plan.view == "nearest":
-        upcoming = [i for i in scope if i in due and due[i] >= now]
-        nearest = [min(upcoming, key=due.get)] if upcoming else []
-        text = "Первым истекает срок у этого инцидента." if nearest else "В выборке нет активного инцидента с предстоящим сроком."
-        late = sum(i in due and due[i] < now for i in scope)
-        if late:
-            text += f" Уже просрочено: {late}."
-        return ChatContent(answer=text, incidents=nearest, total=len(nearest), metric="sla")
-    if plan.view == "relations":
-        candidates = list(rows.values()) if plan.scope == "selected" and len(selected) == 1 else [rows[i] for i in scope]
-        relations = possible_relations(candidates, set(selected) if plan.scope == "selected" else set(), plan.allRelations)
-        text = ("Есть записи, которые стоит проверить вместе."
-                if relations else "В выбранных записях недостаточно совпадений, чтобы предположить связь.")
-        return ChatContent(answer=text, relations=relations)
-    if plan.view == "overview":
-        if plan.scope == "all":
-            history = set(groups["history"])
-            critical = set(groups["critical"])
-            waiting = [i for i in groups["assigned"] if i not in critical]
-            scope = list(dict.fromkeys(groups["critical"][:1] + waiting[:1] + groups["critical"]
-                                       + groups["assigned"] + [i for i in scope if i not in history]))
-            n = len(rows)
-            noun = "инцидентов" if 11 <= n % 100 <= 14 else {1: "инцидент", 2: "инцидента", 3: "инцидента", 4: "инцидента"}.get(n % 10, "инцидентов")
-            text = f"В снимке {n} {noun}."
-            if groups["critical"] and groups["assigned"]:
-                text += " Сейчас в фокусе — критические и назначенные координаторам."
-            elif groups["critical"]:
-                text += " В первую очередь проверьте критические."
-            elif groups["assigned"]:
-                text += " В первую очередь проверьте очередь координаторов."
-            else:
-                text += " Критических и назначенных координаторам сейчас нет."
-        relations = possible_relations([rows[i] for i in scope], set(), plan.allRelations) if plan.includeRelations else []
-        stats = ({k: len(groups[k]) for k in ("critical", "assigned")} if plan.scope == "all"
-                 else {plan.scope: len(scope)} if plan.scope in groups else {})
-        return ChatContent(answer=text or f"На контроле: {len(scope)}.", incidents=scope, total=len(scope), relations=relations, stats=stats)
-    if plan.view == "list":
-        label = GROUP_NAMES.get(plan.scope, "Подходящие инциденты")
-        intro = f"{label}: {len(scope)}." if scope else "По запросу нет инцидентов."
-        relations = possible_relations([rows[i] for i in scope], set(), plan.allRelations) if plan.includeRelations else []
-        if scope and plan.scope in groups:
-            intro = f"Очередь «{label}»."
-        return ChatContent(answer=intro, incidents=scope, total=len(scope), relations=relations,
-                           stats={plan.scope: len(scope)} if plan.scope in groups else {},
-                           metric="status" if plan.scope == "assigned" else "auto")
-    if plan.view == "detail" and selected:
-        row = rows[selected[0]]
-        text = text or row.get("description") or row.get("header") or "Описание отсутствует."
-        if row["id"] not in text:
-            text = f'{row["id"]} — {text}'
-        return ChatContent(answer=text)
-    return ChatContent(answer=text or ("Подходящие записи:" if selected else "В снимке недостаточно данных для ответа."),
-                       incidents=selected)
+
+def query_answer(plan: ChatPlan, snapshot: dict, previous: list[str]) -> ChatContent:
+    query = plan.query
+    rows = {r["id"]: r for r in snapshot["incidents"]}
+    if query is None:
+        return prose_answer(plan.text, rows)
+    ids, total = select_records(query, snapshot, previous)
+    if (query.scope == "previous" or query.position is not None) and not previous:
+        return ChatContent(answer="Какой перечень вы имеете в виду? Уточните категорию или номер инцидента.")
+    if query.position is not None and query.position > len(previous):
+        return ChatContent(answer="В предыдущем перечне нет записи под таким номером. Уточните номер или название.")
+    text = plain_reply(plan.text.replace("{count}", str(total)), rows)[0]
+    if query.operation == "overview" and query.display == "text":
+        ongoing = {key for key, row in rows.items() if row["stateEnum"] in OPEN or row["stateEnum"] == "Research"}
+        return ChatContent(answer="", total=len(ongoing))
+    if query.operation == "count" and query.display == "text":
+        label = ("Просроченных в выборке" if query.overdue else GROUP_NAMES.get(
+            query.scope, "Активных инцидентов" if query.scope == "active" else "Инцидентов в выборке"))
+        return ChatContent(answer=text if "{count}" in plan.text and text else f"{label}: {total}.",
+                           references=ids, total=total)
+    if query.display == "ids":
+        return ChatContent(answer="\n".join(ids) or "Подходящих инцидентов нет.", references=ids, total=total, display="ids")
+    if not ids:
+        return ChatContent(answer=("Предстоящих сроков у активных инцидентов в этой выборке нет."
+                                   if query.operation == "nearest" else "Подходящих записей в текущих данных нет."), total=0)
+    relations = []
+    if query.withRelations or query.operation == "relations":
+        single = len(ids) == 1 and (query.ids or query.scope == "previous")
+        candidates = list(rows.values()) if single else [rows[key] for key in ids]
+        relations = possible_relations(candidates, set(ids) if single else set(), query.allRelations)
+    if query.operation == "relations":
+        refs = list(dict.fromkeys(key for pair in relations for key in pair.ids))
+        return ChatContent(answer=(text or "Эти записи стоит проверить вместе.") if relations else
+                           "Общих технических признаков недостаточно, чтобы предположить связь.",
+                           references=refs, relations=relations, total=total)
+    display = "list" if query.operation == "nearest" else query.display
+    cards = ids if display in ("list", "owners", "priority") else []
+    stats = {query.scope: total} if display == "list" and query.scope in snapshot["groups"] and query.operation != "nearest" else {}
+    return ChatContent(answer=text or ("Ближайший предстоящий срок." if query.operation == "nearest" else ""),
+                       incidents=cards, references=ids, total=total, display=display, relations=relations,
+                       stats=stats, showAll=query.showAll, metric="sla" if query.operation == "nearest" else "auto")

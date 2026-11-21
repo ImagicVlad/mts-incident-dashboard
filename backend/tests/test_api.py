@@ -74,8 +74,7 @@ def test_summary_cache_chat_context_and_input_contract(source):
         body = json.loads(req.content)
         calls.append(body)
         assert req.headers["authorization"] == "Bearer test-key"
-        context = json.loads(body["messages"][1]["content"])
-        content = json.dumps(NOTES if "incident" in context else {"view": "count", "scope": "critical"})
+        content = json.dumps({"query": {"operation": "count", "scope": "critical"}} if "tools" in body else NOTES)
         return httpx.Response(200, json={"choices": [{"message": {"content": content}}]})
 
     app = create_app(settings(source, llm_api_key="test-key"), provider_transport=httpx.MockTransport(provider))
@@ -92,11 +91,8 @@ def test_summary_cache_chat_context_and_input_contract(source):
         assert chat.status_code == 200
         assert chat.json()["answer"] == "Критические: 1."
         assert chat.json()["total"] == 1 and chat.json()["incidents"] == []
-        context = json.loads(calls[-1]["messages"][1]["content"])
-        assert context["counts"]["critical"] == 1
-        assert context["selection"][0]["id"] == "demo-001"
-        assert isinstance(context["selection"][0]["minutesUntilDeadline"], int)
-        assert "test-key" not in json.dumps(context)
+        assert calls[-1]["tools"][0]["function"]["name"] == "lookup_incidents"
+        assert "test-key" not in json.dumps(calls[-1])
         for bad in ({"messages": messages, "context": {}}, {"messages": [{"role": "system", "content": "wrong"}]},
                     {"messages": [{"role": "user", "content": "?" * 2001}]}):
             assert client.post("/api/ai/chat", json=bad).status_code == 422
@@ -122,6 +118,10 @@ def test_chat_accepts_plain_provider_and_includes_requested_description(source):
     source.write_text(json.dumps([{**ROW, "description": "Операция застревает при подтверждении."}]), encoding="utf-8")
     def provider(req):
         payload = json.loads(req.content)
+        if "tools" in payload:
+            args = json.dumps({"ids":["DEMO-001"],"analyze":True})
+            return httpx.Response(200, json={"choices":[{"message":{"content":None,
+                "tool_calls":[{"function":{"name":"lookup_incidents","arguments":args}}]}}]})
         context = json.loads(payload["messages"][1]["content"])
         assert context["selection"][0]["description"] == "Операция застревает при подтверждении."
         if "response_format" in payload:
@@ -132,6 +132,53 @@ def test_chat_accepts_plain_provider_and_includes_requested_description(source):
         sign_in(client)
         answer = client.post("/api/ai/chat", json={"messages": [{"role": "user", "content": "Подробнее про DEMO-001"}]}).json()
         assert answer["answer"] == "Проверяется подтверждение." and answer["incidents"] == ["demo-001"]
+
+
+def test_followup_reads_every_verified_row_in_order_after_source_change(source):
+    records = [{**ROW, "id": f"INC-{n}", "header": f"Задержка расчёта {n}", "assignedGroupName": "Биллинг",
+                "assignedEmployee": f"Дежурный {n}"} for n in range(12)]
+    source.write_text(json.dumps(records), encoding="utf-8")
+    ids = [row["id"] for row in reversed(records)]
+    def provider(req):
+        payload = json.loads(req.content)
+        if "tools" in payload:
+            assert "assignedEmployee" not in json.dumps(payload["messages"])
+            return httpx.Response(200, json={"choices":[{"message":{"content":json.dumps({
+                "query":{"scope":"previous","display":"owners","analyze":True}})}}]})
+        context = json.loads(payload["messages"][1]["content"])
+        assert context["matched"] == context["processed"] == 12
+        assert [row["id"] for row in context["selection"]] == ids
+        assert context["selection"][0]["assignedGroupName"] == "Новая команда"
+        assert context["selection"][-1]["assignedEmployee"] == "Дежурный 0"
+        return httpx.Response(200, json={"choices":[{"message":{"content":"Большинство задач ведёт биллинг."}}]})
+    app = create_app(settings(source, llm_api_key="test-key"), provider_transport=httpx.MockTransport(provider))
+    with TestClient(app) as client:
+        sign_in(client)
+        old = client.get("/api/incidents").json()
+        records[-1]["assignedGroupName"] = "Новая команда"
+        source.write_text(json.dumps(records), encoding="utf-8")
+        client.portal.call(app.state.store.reload)
+        response = client.post("/api/ai/chat", json={
+            "messages":[{"role":"user","content":"Кто теперь ими занимается?"}],
+            "previous":{"ids":ids, "epoch":old["epoch"], "snapshotVersion":old["snapshotVersion"]},
+        })
+        assert response.status_code == 200
+        reply = response.json()
+        assert reply["references"] == reply["incidents"] == ids
+        assert reply["display"] == "owners" and "повторно" in reply["answer"]
+        assert reply["snapshotVersion"] > old["snapshotVersion"]
+
+
+def test_chat_can_converse_without_incident_file(source):
+    replies = iter(["Привет! Чем помочь?", json.dumps({"query":{"scope":"critical","display":"list"}})])
+    mock = httpx.MockTransport(lambda _: httpx.Response(200, json={"choices":[{"message":{"content":next(replies)}}]}))
+    with TestClient(create_app(settings(source.with_suffix(".missing"), llm_api_key="test-key"), provider_transport=mock)) as client:
+        sign_in(client)
+        def ask(question):
+            return client.post("/api/ai/chat", json={"messages":[{"role":"user","content":question}]}).json()
+        assert ask("Привет")["answer"] == "Привет! Чем помочь?"
+        unavailable = ask("Покажи критические")
+        assert not unavailable["incidents"] and "недоступны" in unavailable["answer"]
 
 
 @pytest.mark.parametrize(("owner", "stage", "candidate", "expected"), [

@@ -82,6 +82,8 @@ summary { cursor: pointer; }
 .chat-id { font-family: var(--mono); }
 .chat-incident-title { grid-area: title; font-size: 1rem; font-weight: 700; line-height: 1.35; }
 .chat-incident-metric { grid-area: metric; color: var(--metric); font-size: .84rem; font-weight: 600; text-align: right; }
+.chat-answer .chat-incident-row[data-owners] { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "meta meta" "title arrow" "owners owners"; }
+.chat-owners { grid-area: owners; display: flex; flex-wrap: wrap; gap: 2px 12px; color: var(--reply-muted); font-size: .85rem; line-height: 1.45; }
 .chat-open-icon { grid-area: arrow; justify-self: end; align-self: end; color: #90869f; }
 .chat-relation { background: #faf9fe; border: 1px solid #e4dff1; margin-top: 16px; padding: 14px 16px; border-radius: 12px; }
 .chat-relation header, .chat-relation footer { justify-content: space-between; flex-wrap: wrap; }

@@ -20,6 +20,9 @@ export interface Snapshot {
 export interface Account { login: string; displayName: string }
 export interface Answer { answer: string; epoch: string; snapshotVersion: number; asOf: string; stale?: boolean }
 export interface ChatAnswer extends Answer {
+  display?: 'text' | 'list' | 'owners' | 'priority' | 'ids';
+  references?: string[];
+  showAll?: boolean;
   incidents?: string[];
   relations?: {ids: string[]; reason: string}[];
   total?: number | null;

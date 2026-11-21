@@ -35,12 +35,16 @@ export function Chat() {
     const controller = new AbortController(); abort.current=controller;
     setMessages(next); setPending(true); setDraft(''); setError('');
     try {
-      const turns = next.slice(-7).map(({role, content, source}) => {
-        const refs = [...(source?.incidents ?? []), ...(source?.relations ?? []).flatMap(group => group.ids)];
-        const historyText = refs.length ? content + '\nЗаписи в ответе: ' + refs.join(', ') : content;
-        return {role, content: historyText.slice(0, role === 'user' ? 2000 : 4000)};
-      });
-      const answer = await api<ChatAnswer>('ai/chat', {messages: turns}, controller.signal);
+      const turns = next.slice(-9).map(({role, content}) => ({role, content: content.slice(0, role === 'user' ? 2000 : 4000)}));
+      const subject = previous.map(m => m.source).reverse().find(s => s && (
+        s.total != null || s.references?.length || s.incidents?.length || s.relations?.length
+      ));
+      const reference = subject && {
+        ids: subject.references ?? subject.incidents ?? [], relations: subject.relations?.map(pair => pair.ids) ?? [],
+        ordered: Boolean(subject.incidents?.length || subject.relations?.length || subject.display === 'ids'),
+        epoch: subject.epoch, snapshotVersion: subject.snapshotVersion,
+      };
+      const answer = await api<ChatAnswer>('ai/chat', {messages: turns, previous: reference}, controller.signal);
       setMessages([...next,{role:'assistant',content:answer.answer,source:answer}]);
     } catch (err) {
       if (!controller.signal.aborted) {setMessages(previous);setError(errorText(err));setDraft(text);}

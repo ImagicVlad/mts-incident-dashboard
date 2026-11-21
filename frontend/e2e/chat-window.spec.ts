@@ -26,7 +26,7 @@ test('список ответа раскрывается на месте, ссы
   await page.route('**/api/ai/chat', async route => {
     calls++;
     if (calls === 1) return route.fulfill({status: 503, json: {detail: 'Сервис ИИ недоступен.'}});
-    return route.fulfill({json: {answer: 'Записи смены.', incidents: [...ids, 'INC-DOES-NOT-EXIST'],
+    return route.fulfill({json: {answer: 'Записи смены.', display: 'list', incidents: [...ids, 'INC-DOES-NOT-EXIST'],
       stats: {critical: snapshot.groups.critical.length, assigned: snapshot.groups.assigned.length},
       relations: [{ids: ids.slice(0, 2), reason: 'В обеих записях нарушена передача сетевого трафика.'}], total: ids.length,
       epoch: snapshot.epoch, snapshotVersion: snapshot.snapshotVersion, asOf: snapshot.serverTime}});
@@ -39,7 +39,8 @@ test('список ответа раскрывается на месте, ссы
   await expect(input).toHaveValue('Покажи все инциденты');
   await chat.getByRole('button', {name: 'Повторить'}).click();
   const links = chat.locator('.chat-priorities a');
-  await expect(links).toHaveCount(2);
+  await expect(links).toHaveCount(6);
+  await expect(chat.getByRole('heading', {name:'В первую очередь'})).toHaveCount(0);
   await expect(chat.locator('.chat-answer')).not.toContainText(/Снимок \d/);
   await expect(chat.locator('.chat-stats [data-group=critical]')).toContainText(String(snapshot.groups.critical.length));
   const showMore = chat.getByRole('button', {name: 'Показать остальные инциденты'});
@@ -47,14 +48,14 @@ test('список ответа раскрывается на месте, ссы
   await expect(links.first()).toContainText(items[0].productName);
   await expect(chat.getByRole('link', {name: /DOES-NOT-EXIST/})).toHaveCount(0);
   await showMore.click();
-  await expect(links).toHaveCount(6);
+  await expect(links).toHaveCount(Math.min(10, ids.length));
   await chat.getByRole('button', {name: 'Открепить ИИ-чат'}).click();
   await page.setViewportSize({width: 340, height: 700});
   await expect(chat).toHaveAttribute('data-mode', 'floating');
   expect(await chat.getByRole('log').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
   await chat.getByRole('button', {name: 'Развернуть чат'}).click();
   await expect(chat).toHaveAttribute('data-mode', 'maximized');
-  for (let i = 6; i < ids.length; i += 4) await showMore.click();
+  for (let i = 10; i < ids.length; i += 4) await showMore.click();
   await expect(links).toHaveCount(ids.length);
   await expect(showMore).toHaveCount(0);
   for (const id of ids) {
@@ -79,6 +80,45 @@ test('список ответа раскрывается на месте, ссы
   await expect(page.getByRole('heading', {name: items[1].header, exact: true})).toBeVisible();
   await expect(links).toHaveCount(ids.length);
   expect(calls).toBe(2);
+});
+
+test('ответственные, уточнение по порядку и разговор без лишних блоков', async ({page}) => {
+  await openDashboard(page);
+  const snap = await (await page.request.get('/api/incidents')).json();
+  const ids = snap.incidents.map((r: {id:string}) => r.id).reverse();
+  const chat = page.locator('.incident-chat');
+  const ask = async (question:string) => {
+    await chat.getByRole('textbox').fill(question);
+    await chat.getByRole('textbox').press('Enter');
+  };
+  let calls = 0;
+  await page.route('**/api/ai/chat', route => {
+    const body = route.request().postDataJSON();
+    const base = {epoch:snap.epoch, snapshotVersion:snap.snapshotVersion, asOf:snap.serverTime};
+    calls++;
+    if (calls === 1) return route.fulfill({json:{...base, answer:'Вот весь перечень.', references:ids, incidents:ids, display:'list', showAll:true}});
+    expect(body.previous.ids).toEqual(ids);
+    expect(body.previous.ordered).toBe(true);
+    if (calls === 2) return route.fulfill({json:{...base, answer:'Ответственные за эти записи.', references:ids, incidents:ids, display:'owners', showAll:true}});
+    return route.fulfill({json:{...base, answer:'Всё хорошо, спасибо!', display:'text'}});
+  });
+  await ask('Покажи все инциденты');
+  await expect(chat.locator('.chat-answer').last().locator('.chat-incident-row')).toHaveCount(ids.length);
+  await chat.getByRole('button', {name:'Открепить ИИ-чат'}).click();
+  await ask('А кто ими занимается?');
+  await expect(chat.locator('.chat-owners')).toHaveCount(ids.length);
+  const owners = chat.locator('.chat-answer').last();
+  await expect(owners.locator('.chat-incident-metric')).toHaveCount(0);
+  await expect(owners.getByRole('heading')).toHaveCount(0);
+  const row = snap.incidents.find((r: {id:string}) => r.id === ids[1]);
+  await expect(owners.locator('.chat-owners').nth(1)).toContainText(row.assignedEmployee || 'не указан');
+  await expect(owners.locator('.chat-owners').nth(1)).toContainText(row.assignedGroupName || 'не указана');
+  await owners.locator('.chat-incident-row').nth(1).click();
+  await expect(page).toHaveURL(new RegExp('/incidents/' + row.id + '$'));
+  await ask('Как дела?');
+  const casual = chat.locator('.chat-answer').last();
+  await expect(casual).toContainText('Всё хорошо');
+  await expect(casual.locator('.chat-priorities,.chat-relation,.chat-stats')).toHaveCount(0);
 });
 
 async function drag(page: Page, handle: Locator, dx: number, dy: number) {
