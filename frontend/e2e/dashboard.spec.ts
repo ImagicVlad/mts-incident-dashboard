@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { readFile, rename, writeFile } from 'node:fs/promises';
+import { displayFormats } from '../src/api';
 
 const file = process.env.E2E_SOURCE!;
 async function replace(contents: string) {
@@ -7,7 +8,7 @@ async function replace(contents: string) {
   await rename(file + '.writing', file);
 }
 
-test('карточки сохраняют расположение статуса, срока и SLA при переносе текста и пропусках в данных', async ({page}) => {
+test('краткие карточки показывают команду и живой SLA, исполнитель и срок доступны в подробностях', async ({page}) => {
   const original = await readFile(file, 'utf8');
   const [urgent, coordinator, sparse, , review] = JSON.parse(original);
   urgent.deadline = new Date(Date.now() - 3_600_000).toISOString();
@@ -16,11 +17,12 @@ test('карточки сохраняют расположение статус�
   urgent.assignedEmployee = 'Дежурный ' + 'ДвойнаяФамилия'.repeat(6);
   urgent.productName = 'МониторингСети'.repeat(6);
   Object.assign(sparse, {priorityId: 4, productName: null, header: null, submitDate: null, deadline: null,
-    assignedGroupName: null, assignedEmployee: null, lastAssignmentToTeamDateTime: null});
+    assignedGroupName: null, lastAssignmentToTeamDateTime: null});
   review.deadline = null;
   const card = (group: string, id: string) => page.getByTestId('group-' + group).locator(`[data-incident-id="${id}"]`);
   try {
     await replace(JSON.stringify([urgent, coordinator, sparse, review]));
+    await page.clock.install();
     await page.goto('/login');
     await page.getByRole('button', {name: 'Войти', exact: true}).click();
     const overdue = card('critical', urgent.id);
@@ -28,10 +30,11 @@ test('карточки сохраняют расположение статус�
     const research = card('review', review.id);
     await expect(overdue.locator('.time-left')).toContainText('Просрочен');
     await expect(high.locator('.time-left')).toContainText('Осталось');
-    await expect(high.locator('.card-dates > span').first()).toContainText('У координаторов с');
-    await expect(high.locator('.card-dates > span').last()).toContainText('Срок устранения');
+    await expect(high.locator('.coordinator-since')).toContainText('У координаторов с');
     await expect(research.locator('.time-left')).toContainText('Сбой устранён');
-    await expect(research).not.toContainText('Срок устранения');
+    await expect(page.locator('.incident').filter({hasText: /Исполнитель|Срок устранения/i})).toHaveCount(0);
+    await expect(overdue).not.toContainText(urgent.assignedEmployee);
+    await expect(overdue).not.toContainText(displayFormats().stamp(urgent.deadline));
     const minimal = card('critical', sparse.id);
     await expect(minimal).toBeVisible();
     await expect(minimal.locator('h3, .product, .card-meta, .card-foot')).toHaveCount(0);
@@ -47,22 +50,31 @@ test('карточки сохраняют расположение статус�
           const header = rect('.card-top'), pill = rect('.pill'), identity = rect('.card-identity');
           const id = rect('.mono'), product = rect('.product');
           const title = rect('h3'), meta = rect('.card-meta'), foot = rect('.card-foot');
-          const dates = rect('.card-dates'), timer = rect('.time-left');
+          const start = rect('.card-meta > span'), team = rect('.card-team'), timer = rect('.time-left');
           return {
             statusRight: header.right - pill.right, statusTop: pill.top - header.top,
             timerRight: foot.right - timer.right, timerBottom: foot.bottom - timer.bottom,
-            datesLeft: dates.left - foot.left, zonesSeparate: dates.right <= timer.left || dates.bottom <= timer.top,
+            metadataLeft: meta.left - foot.left, zonesSeparate: meta.right <= timer.left,
+            inlineWhenWide: innerWidth < 1440 || (start.right <= team.left && Math.abs(start.top - team.top) < 1),
             identityOrdered: id.right <= product.left && product.right <= pill.left && product.top < id.bottom,
-            rowsOrdered: identity.right <= pill.left && header.bottom < title.top && title.bottom < meta.top && meta.bottom < foot.top,
+            rowsOrdered: identity.right <= pill.left && header.bottom < title.top && title.bottom < foot.top && meta.bottom === foot.bottom,
             overflows: el.scrollWidth > el.clientWidth || document.documentElement.scrollWidth > innerWidth,
           };
         });
-        expect(layout).toEqual({statusRight: 0, statusTop: 0, timerRight: 0, timerBottom: 0, datesLeft: 0,
-          zonesSeparate: true, identityOrdered: true, rowsOrdered: true, overflows: false});
+        expect(layout).toEqual({statusRight: 0, statusTop: 0, timerRight: 0, timerBottom: 0, metadataLeft: 0,
+          zonesSeparate: true, inlineWhenWide: true, identityOrdered: true, rowsOrdered: true, overflows: false});
       }
     }
+    const timer = high.locator('.time-left');
+    const before = await timer.innerText();
+    await page.clock.fastForward(60_000);
+    await expect(timer).not.toHaveText(before);
+    await expect(timer).toContainText('Осталось');
     await overdue.click();
     await expect(page.getByRole('heading', {name: urgent.header, exact: true})).toBeVisible();
+    const facts = page.locator('.facts');
+    await expect(facts.getByText('Исполнитель', {exact: true}).locator('+ dd')).toHaveText(urgent.assignedEmployee);
+    await expect(facts.getByText('Плановый срок устранения', {exact: true}).locator('+ dd')).toHaveText(displayFormats().stamp(urgent.deadline));
   } finally { await replace(original); }
 });
 
