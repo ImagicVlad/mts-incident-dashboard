@@ -1,0 +1,66 @@
+.workspace-identity {
+  --identity-gutter: clamp(28px, 4.4vw, 82px);
+  display: grid;
+  grid-template-rows: auto minmax(min-content, 1.9fr) minmax(0, 1fr);
+  min-width: 0;
+  overflow: hidden;
+  padding-block: clamp(24px, 5vh, 68px) clamp(32px, 7vh, 84px);
+  background: #242628;
+  color: #f4f3ed;
+}
+
+.workspace-brand, .workspace-introduction { margin-inline: var(--identity-gutter); }
+.workspace-brand { display: flex; align-items: center; gap: 14px; font-weight: 560; font-size: .875rem; }
+.workspace-brand img { display: block; flex: none; }
+.workspace-introduction { align-self: center; padding-block: 24px; }
+.workspace-introduction h2 {
+  margin: 0;
+  font-size: clamp(2.7rem, 4.7vw, 5.7rem);
+  font-weight: 585;
+  line-height: 1.03;
+  letter-spacing: -.05em;
+}
+.workspace-introduction p {
+  max-width: 34ch;
+  margin: 22px 0 0;
+  color: #c0c3c3;
+  font-size: clamp(.97rem, 1.3vw, 1.3rem);
+  line-height: 1.48;
+}
+.workspace-routes { align-self: end; width: 100%; height: clamp(90px, 24vh, 300px); }
+.workspace-routes path { vector-effect: non-scaling-stroke; }
+.workspace-route-lines { stroke: #6f7374; stroke-width: 1.4px; }
+.workspace-route-active { stroke: #ff3553; stroke-width: 3px; stroke-dasharray: 24 110; stroke-dashoffset: -36; }
+@media (prefers-reduced-motion: no-preference) {
+  .workspace-route-active { animation: workspace-transfer 12s cubic-bezier(.38,.06,.28,1) -4s infinite; }
+  @keyframes workspace-transfer {
+    0% { stroke-dashoffset: 24; }
+    78%, 100% { stroke-dashoffset: -110; }
+  }
+}
+
+@media (max-width: 760px) {
+  .workspace-identity {
+    --identity-gutter: clamp(20px, 5vw, 32px);
+    position: relative;
+    isolation: isolate;
+    grid-template-rows: auto auto;
+    padding-block: 16px 20px;
+  }
+  .workspace-brand { gap: 8px; font-size: .73rem; }
+  .workspace-brand img { width: 26px; height: 26px; }
+  .workspace-introduction { padding: 0; margin-top: 14px; }
+  .workspace-introduction h2 { font-size: clamp(1.68rem, 5.8vw, 2.85rem); }
+  .workspace-introduction p { display: none; }
+  .workspace-routes {
+    position: absolute; z-index: -1; bottom: 0; right: -8%;
+    width: 39%; height: 48%; opacity: .8;
+  }
+}
+@media (min-width: 761px) and (max-height: 570px) {
+  .workspace-identity { padding-block: 18px 20px; }
+  .workspace-brand img { width: 28px; height: 28px; }
+  .workspace-introduction h2 { font-size: clamp(2.25rem, 4.2vw, 3.4rem); }
+  .workspace-introduction p { margin-top: 10px; font-size: .92rem; }
+  .workspace-routes { height: min(19vh, 90px); }
+}

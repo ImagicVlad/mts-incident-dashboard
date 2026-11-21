@@ -1,11 +1,21 @@
 import { createRoot } from 'react-dom/client';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Eye, EyeOff } from 'lucide-react';
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError, errorText, pathFor, type Account } from './api';
 import './styles.css';
 import HandoffPoster from './login/HandoffPoster';
 import PriorityPoster from './login/PriorityPoster';
+import WorkspaceIdentity from './login/WorkspaceIdentity';
+import CompactLoginLayout from './login/CompactLoginLayout';
+
+const loginPosters = {workspace: WorkspaceIdentity, handoff: HandoffPoster, priority: PriorityPoster};
+type LoginVariant = keyof typeof loginPosters | 'compact';
+
+function isLoginVariant(value: string | null): value is LoginVariant {
+  return value === 'compact' || (value !== null && Object.hasOwn(loginPosters, value));
+}
 
 const client = new QueryClient({defaultOptions:{queries:{retry:false, refetchOnWindowFocus:false}}});
 const Console = lazy(()=>import('./Console'));
@@ -35,36 +45,49 @@ function SessionBoundary({loginPage=false}: {loginPage?:boolean}) {
     const from: unknown = location.state?.from;
     const target = typeof from === 'string' && /^\/(dashboard(?:$|[?#])|incidents\/)/.test(from) ? from : '/dashboard';
     const variant = new URLSearchParams(location.search).get('variant');
-    const preview = variant === 'handoff' || variant === 'priority';
+    const preview = isLoginVariant(variant);
     if (user && !preview) return <Navigate replace to={target}/>;
-    return <Login variant={variant === 'priority' ? 'priority' : 'handoff'} destination={target}/>;
+    return <Login variant={preview ? variant : 'workspace'} destination={target}/>;
   }
   if (!user) return <Navigate replace to="/login" state={{from:location.pathname + location.search + location.hash}}/>;
   return <Console user={user}/>;
 }
-function Login({variant, destination}: {variant: 'handoff' | 'priority'; destination: string}) {
+function Login({variant, destination}: {variant: LoginVariant; destination: string}) {
   const navigate = useNavigate();
   const cache = useQueryClient();
   const [login,setLogin] = useState('coordinator.demo');
   const [password,setPassword] = useState('mts-demo-local');
+  const [showPassword,setShowPassword] = useState(false);
   const [pending,setPending] = useState(false);
   const [error,setError] = useState('');
   useEffect(() => {document.title = 'Вход · Пульт координатора';},[]);
-  return <main className="auth-layout">
-      {variant === 'priority' ? <PriorityPoster/> : <HandoffPoster/>}
-      <section className="auth-panel"><div className="auth-box"><p className="eyebrow">Доступ координатора</p><h1>Вход в пульт</h1>
-        <p className="intro-note">Войдите под демонстрационной учётной записью.</p>
+  const form = <section className="auth-panel" aria-labelledby="login-title"><div className="auth-box">
+        {variant !== 'workspace' && <p className="eyebrow">{variant === 'compact' ? 'Пульт координатора' : 'Доступ координатора'}</p>}
+        <h1 id="login-title">Вход в пульт</h1>
+        <p className="intro-note">Логин и пароль демоаккаунта уже заполнены.</p>
         <form onSubmit={async event => {
           event.preventDefault(); if (pending) return; setPending(true); setError('');
           try {const account = await api<Account>('auth/login',{login,password}); cache.setQueryData(['account'],account); navigate(destination,{replace:true});}
           catch (e) {setError(errorText(e));} finally {setPending(false);}
         }}>
           <label>Логин<input name="login" autoComplete="username" value={login} onChange={e=>setLogin(e.target.value)} required/></label>
-          <label>Пароль<input name="password" type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required/></label>
+          <div className="password-field">
+            <label htmlFor="login-password">Пароль</label>
+            <div className="password-control">
+              <input id="login-password" name="password" type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required/>
+              <button type="button" className="password-toggle" aria-controls="login-password"
+                aria-label={showPassword ? 'Скрыть пароль' : 'Показать пароль'} onClick={()=>setShowPassword(!showPassword)}>
+                {showPassword ? <EyeOff size={18} aria-hidden="true"/> : <Eye size={18} aria-hidden="true"/>}
+              </button>
+            </div>
+          </div>
           {error && <p className="form-error" role="alert">{error}</p>}
           <button className="button primary" disabled={pending}>{pending ? 'Входим…' : 'Войти'}</button>
-        </form></div></section>
-    </main>;
+        </form></div></section>;
+  if (variant === 'compact') return <CompactLoginLayout>{form}</CompactLoginLayout>;
+  const Poster = loginPosters[variant];
+  return <main className={`auth-layout login-${variant}`}><Poster/>{form}</main>;
 }
 function LegacyIncident() {
   const hash = useLocation().hash.slice(1);

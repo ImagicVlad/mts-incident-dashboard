@@ -115,6 +115,19 @@ h3 { font-size: 1.16rem; letter-spacing: -.025em; font-weight: 650; }
 .auth-box h1 { font-size: clamp(2.25rem,3.7vw,3.5rem); }.intro-note { color: var(--muted); margin: 12px 0 32px; line-height: 1.5; }
 .auth-box form { display: grid; gap: 18px; }.auth-box label { display: grid; gap: 7px; font-weight: 560; font-size: .91rem; }
 .auth-box input { width: 100%; border: 1px solid #cbd0d7; border-radius: 8px; padding: 13px; font: inherit; color: #323945; background: #fafbfc; }.auth-box button { margin-top: 4px; }
+.password-field { display: grid; gap: 7px; }
+.password-control { position: relative; }
+.password-control input { padding-inline-end: 48px; font-size: .91rem; }
+.auth-box .password-toggle {
+  position: absolute; inset: 1px 1px 1px auto;
+  display: grid; place-items: center; width: 44px; margin: 0; padding: 0;
+  background: transparent; color: #5b6370; border: 0; border-radius: 6px; cursor: pointer;
+}
+.auth-box .password-toggle:hover { color: #171b22; background: #eceef1; }
+.login-workspace .auth-box { max-width: 380px; }
+.login-workspace .auth-box h1 { margin-top: 0; font-size: clamp(2rem, 3vw, 2.75rem); }
+.login-workspace .auth-box input { background: white; }
+.login-workspace .auth-box input:focus-visible { outline: 2px solid #404650; outline-offset: 1px; }
 .show-intro { padding: 48px 0 30px; }.show-intro .intro-note { margin: 12px 0 0; }
 .show-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px; padding-bottom: 40px; }
 .screen-card { display: block; overflow: hidden; }.screen-card img { width: 100%; height: auto; display: block; }

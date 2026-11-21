@@ -88,4 +88,6 @@ Playwright запускает отдельные серверы на 8016 и 518
 
 ## Варианты страницы входа
 
-На `/login` показана передача инцидента профильной команде. Для сравнения откройте [«Передача инцидента»](http://localhost:5174/login?variant=handoff) или [«Приоритет смены»](http://localhost:5174/login?variant=priority). Обе иллюстрации используют вымышленные примеры. Фотоплакат с Шуховской башней сохранён в [версии login-shukhov](https://github.com/ImagicVlad/mts-incident-dashboard/tree/login-shukhov).
+На `/login` по умолчанию открывается [«Рабочее место»](http://localhost:5174/login?variant=workspace) с описанием пульта слева и формой справа. [«Компактный вход»](http://localhost:5174/login?variant=compact) собирает логотип и форму в одну колонку. Обе ссылки работают и при открытой сессии.
+
+Для сравнения доступны учебные варианты [«Передача инцидента»](http://localhost:5174/login?variant=handoff) и [«Приоритет смены»](http://localhost:5174/login?variant=priority). Фотоплакат с Шуховской башней сохранён в [версии login-shukhov](https://github.com/ImagicVlad/mts-incident-dashboard/tree/login-shukhov).

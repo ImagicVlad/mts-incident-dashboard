@@ -1,0 +1,105 @@
+.compact-login {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 32px 20px;
+  background: #f2f1ee;
+  color: #222425;
+}
+
+.compact-login-sheet {
+  --inset: clamp(24px, 3vw, 42px);
+  position: relative;
+  width: min(100%, 458px);
+  background: #fff;
+  border: 1px solid #d9d8d4;
+  border-radius: 12px;
+}
+
+.compact-login-mark {
+  position: absolute;
+  left: var(--inset);
+  top: var(--inset);
+  display: block;
+}
+
+.compact-login .auth-panel {
+  display: block;
+  padding: var(--inset);
+}
+
+.compact-login .auth-box {
+  width: 100%;
+}
+
+.compact-login .auth-box .eyebrow {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding-left: 49px;
+  margin: 0;
+  color: #303233;
+  font: 650 .91rem/1.25 var(--font-ui);
+  letter-spacing: -.02em;
+  text-transform: none;
+}
+
+.compact-login .auth-box h1 {
+  border-top: 1px solid #e4e3df;
+  margin: 25px 0 0;
+  padding-top: 26px;
+  font-size: clamp(2rem, 3vw, 2.5rem);
+  line-height: 1.08;
+  letter-spacing: -.05em;
+}
+
+.compact-login .auth-box .intro-note {
+  margin: 10px 0 26px;
+  color: #60625f;
+  font-size: .94rem;
+  line-height: 1.48;
+}
+
+.compact-login .auth-box form { gap: 18px; }
+.compact-login .auth-box label { gap: 7px; font-size: .875rem; font-weight: 600; }
+.compact-login .auth-box input {
+  min-height: 46px;
+  padding-block: 11px;
+  border: 1px solid #c9cac6;
+  border-radius: 6px;
+  background: #fff;
+  color: #252627;
+  font-size: 1rem;
+}
+.compact-login .auth-box input:focus-visible {
+  outline: 2px solid #4a4b47;
+  outline-offset: 1px;
+}
+.compact-login .auth-box .button.primary {
+  min-height: 46px;
+  margin-top: 4px;
+  border-radius: 6px;
+}
+
+@media (max-width: 460px) {
+  .compact-login { padding: 20px 12px; }
+  .compact-login-sheet { --inset: clamp(20px, 5.5vw, 24px); }
+}
+
+@media (max-height: 570px) {
+  .compact-login { padding-block: 12px; }
+  .compact-login .auth-box h1 { margin-top: 18px; padding-top: 18px; }
+  .compact-login .auth-box .intro-note { margin-bottom: 18px; }
+  .compact-login .auth-box form { gap: 13px; }
+}
+
+@media (min-width: 650px) and (max-height: 450px) {
+  .compact-login { padding-block: 8px; }
+  .compact-login .auth-panel { padding-block: 12px; }
+  .compact-login-mark { width: 26px; height: 26px; top: 12px; }
+  .compact-login .auth-box .eyebrow { min-height: 26px; padding-left: 36px; }
+  .compact-login .auth-box h1 { margin-top: 10px; padding-top: 10px; font-size: 1.8rem; }
+  .compact-login .auth-box .intro-note { margin: 6px 0 13px; }
+  .compact-login .auth-box form { gap: 8px; }
+}
