@@ -21,6 +21,7 @@ test('сводка показывает пример назначения и с�
     await page.getByRole('button', {name: 'Войти', exact: true}).click();
     await expect(page).toHaveURL(/\/dashboard$/);
     await page.goto('/incidents/' + incident.id);
+    await page.getByRole('button', {name: 'Закрыть окно чата'}).click();
     const section = page.locator('section.ai-note');
     const paper = page.locator('.record-grid > .paper');
     const bottom = (locator: typeof paper) => locator.evaluate(el => el.getBoundingClientRect().bottom);

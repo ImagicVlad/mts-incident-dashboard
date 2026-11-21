@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { active, finished, pathFor, remaining, type GroupId, type Incident } from './api';
 import { useLive } from './live';
-import { Chat } from './Intelligence';
 
 const sections = [
   {id:'critical',name:'Критические',note:'Наивысший приоритет или высокий с истекающим либо нарушенным сроком',tone:'red',icon:'alert-triangle'},
@@ -49,6 +48,7 @@ function Card({item,group,now,animate,priority,onCoordinators}:{item:Incident;gr
   </motion.div>;
 }
 export function Dashboard() {
+  const setChatDock = useOutletContext<(node: HTMLDivElement | null) => void>();
   const {snapshot,now,newCards,bootstrapError,formats:{stamp,zoneLabel}} = useLive();
   const [expanded,setExpanded] = useState<Partial<Record<GroupId,boolean>>>({});
   useEffect(()=>{document.title='Дашборд инцидентов · МТС';},[]);
@@ -87,7 +87,7 @@ export function Dashboard() {
         {nearest && nextClock ? <><strong className="big-clock">{nextClock.clock}</strong><p className="clock-note">{nextClock.overdue?'прошло со срока решения':'до срока решения'} · {stamp(nearest.deadline)} {zoneLabel}</p>
           <div className="focus-bottom"><span className="mono">{nearest.id} / {nearest.productName || 'Продукт не указан'}</span><h3>{nearest.header || 'Без заголовка'}</h3><Link to={pathFor(nearest.id)}>Открыть инцидент <ChevronRight size={14}/></Link></div></>
           : <p className="clock-note empty-clock">Нет активных инцидентов с указанным сроком.</p>}
-      </section><Chat/></aside></div>
+      </section><div className="chat-dock" ref={setChatDock}/></aside></div>
     {renderGroup('history','История решённых инцидентов')}
     {snapshot.diagnostics.length>0 && <details className="source-details"><summary>Замечания к данным ({snapshot.diagnostics.length})</summary><ul>{snapshot.diagnostics.map((m,k)=><li key={k}>{m}</li>)}</ul></details>}
   </main>;

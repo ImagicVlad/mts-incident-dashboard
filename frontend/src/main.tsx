@@ -43,7 +43,7 @@ function SessionBoundary({loginPage=false}: {loginPage?:boolean}) {
   if (isError) return <main className="container waiting"><h1>Сервер недоступен</h1><button className="button secondary" onClick={() => refetch()}>Повторить</button></main>;
   if (loginPage) {
     const from: unknown = location.state?.from;
-    const target = typeof from === 'string' && /^\/(dashboard(?:$|[?#])|incidents\/)/.test(from) ? from : '/dashboard';
+    const target = typeof from === 'string' && /^\/(dashboard\/?(?:$|[?#])|incidents\/|routes\/(dashboard\/overview|itsm\/incident)\/?(?:$|[?#]))/.test(from) ? from : '/dashboard';
     const variant = new URLSearchParams(location.search).get('variant');
     const preview = isLoginVariant(variant);
     if (user && !preview) return <Navigate replace to={target}/>;
@@ -103,11 +103,11 @@ createRoot(document.getElementById('root')!).render(<QueryClientProvider client=
       <Route index element={<Navigate replace to="/dashboard"/>}/>
       <Route path="/dashboard" element={<Dashboard/>}/>
       <Route path="/incidents/:id" element={<Details/>}/>
+      <Route path="/routes/dashboard/overview" element={<Navigate replace to="/dashboard"/>}/>
+      <Route path="/routes/itsm/incident" element={<LegacyIncident/>}/>
       <Route path="*" element={<main className="container waiting"><h1>Страница не найдена</h1><Link className="button secondary" to="/dashboard">К дашборду</Link></main>}/>
     </Route>
     <Route path="/routes/access/login" element={<Navigate replace to="/login"/>}/>
     <Route path="/routes/acces/login" element={<Navigate replace to="/login"/>}/>
-    <Route path="/routes/dashboard/overview" element={<Navigate replace to="/dashboard"/>}/>
-    <Route path="/routes/itsm/incident" element={<LegacyIncident/>}/>
   </Routes></Suspense>
 </BrowserRouter></QueryClientProvider>);

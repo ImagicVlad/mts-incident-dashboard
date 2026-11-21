@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { Copy, Minus, MoveDiagonal2, Sparkles, Square, X } from 'lucide-react';
 
 type Size = { width: number; height: number };
@@ -23,23 +24,58 @@ function fit(rect: Rect, screen: Size): Rect {
   return {width, height, left: clamp(rect.left, 0, screen.width - width), top: clamp(rect.top, 0, screen.height - height)};
 }
 
+function bottomRight(size: Size, screen: Size): Rect {
+  const rect = fit({...size, left: 0, top: 0}, screen);
+  return {...rect, left: Math.max(0, screen.width - rect.width - 20), top: Math.max(0, screen.height - rect.height - 20)};
+}
+
 function WindowButton({label, onClick, children}: {label: string; onClick: () => void; children: ReactNode}) {
   return <button type="button" aria-label={label} title={label} onClick={onClick}>{children}</button>;
 }
 
-export function ChatWindow({children}: {children: ReactNode}) {
+export function ChatWindow({dock, children}: {dock: HTMLElement | null; children: ReactNode}) {
+  // React keeps the portal subtree mounted when the same host moves between parents.
+  const [host] = useState(() => {
+    const element = document.createElement('div');
+    element.className = 'chat-host';
+    return element;
+  });
   const panel = useRef<HTMLElement>(null);
+  const historyOffset = useRef(0);
   const gesture = useRef<Gesture | null>(null);
   const [normal, setNormal] = useState<Rect | null>(null);
   const [maximized, setMaximized] = useState(false);
   const [mini, setMini] = useState<Point | null>(null);
   const [screen, setScreen] = useState(viewport);
-  const floating = normal !== null;
+  const [dockedSize, setDockedSize] = useState<Size>({width: 400, height: 480});
+  const [closedAway, setClosedAway] = useState(false);
+  const hidden = !dock && closedAway;
+  const floating = !dock || (normal !== null && !closedAway);
   const mode = !floating ? 'docked' : mini ? 'minimized' : maximized ? 'maximized' : 'floating';
-  const bounds = normal && fit(normal, screen);
+  const bounds = normal ? fit(normal, screen) : bottomRight(dockedSize, screen);
   const miniWidth = Math.min(224, screen.width), miniHeight = Math.min(48, screen.height);
 
-  useEffect(() => {
+  const parent = floating ? document.body : dock;
+  useLayoutEffect(() => {
+    if (!parent || parent === host.parentNode) return;
+    const log = host.querySelector<HTMLElement>('[role="log"]');
+    const offset = log?.clientHeight ? log.scrollTop : historyOffset.current;
+    parent.appendChild(host);
+    if (log) log.scrollTop = offset;
+  }, [host, parent]);
+  useLayoutEffect(() => () => host.remove(), [host]);
+
+  useLayoutEffect(() => {
+    if (floating || !panel.current) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const {inlineSize: width, blockSize: height} = entry.borderBoxSize[0];
+      if (width && height) setDockedSize({width, height});
+    });
+    observer.observe(panel.current, {box: 'border-box'});
+    return () => observer.disconnect();
+  }, [floating]);
+
+  useLayoutEffect(() => {
     if (!floating) return;
     const update = () => setScreen(viewport());
     update();
@@ -55,14 +91,14 @@ export function ChatWindow({children}: {children: ReactNode}) {
     if (!panel.current) return;
     const {width, height} = panel.current.getBoundingClientRect();
     const available = viewport();
-    const initial = fit({left: 0, top: 0, width, height}, available);
     setScreen(available);
-    setNormal({...initial, left: Math.max(0, available.width - initial.width - 20),
-      top: Math.max(0, available.height - initial.height - 20)});
+    setClosedAway(false);
+    setNormal(bottomRight({width, height}, available));
   }
 
-  function dock() {
-    setNormal(null);
+  function close() {
+    setNormal(dock ? null : bounds);
+    setClosedAway(!dock);
     setMini(null);
     setMaximized(false);
     gesture.current = null;
@@ -101,10 +137,17 @@ export function ChatWindow({children}: {children: ReactNode}) {
   if (mini) style = {width: miniWidth, height: miniHeight,
     left: clamp(mini.left, 0, screen.width - miniWidth), top: clamp(mini.top, 0, screen.height - miniHeight)};
   else if (maximized) style = {left: 0, top: 0, ...screen};
-  else if (bounds) style = bounds;
+  else if (floating) style = bounds;
 
-  return <section ref={panel} className={'incident-chat' + (floating ? ' chat-floating' : '')}
+  return createPortal(<>
+    {hidden && <button type="button" className="chat-stars chat-launcher" aria-label="Открыть ИИ-чат" title="Открыть ИИ-чат"
+      onClick={() => setClosedAway(false)}><Sparkles size={21}/></button>}
+    <section ref={panel} hidden={hidden} className={'incident-chat' + (floating ? ' chat-floating' : '')}
     data-mode={mode} style={style} aria-labelledby="chat-title"
+    onScrollCapture={event => {
+      const target = event.target as HTMLElement;
+      if (target.getAttribute('role') === 'log' && target.clientHeight) historyOffset.current = target.scrollTop;
+    }}
     onPointerMove={move} onPointerUp={stop} onPointerCancel={stop} onLostPointerCapture={stop}>
     <header className="chat-titlebar" onPointerDown={e => start(e, 'move')}>
       {floating ? <span className="chat-stars" aria-hidden="true"><Sparkles size={17}/></span> :
@@ -112,10 +155,16 @@ export function ChatWindow({children}: {children: ReactNode}) {
       <h2 id="chat-title">ИИ-чат</h2>
       {floating && <div className="chat-controls">
         {mini ? <WindowButton label="Восстановить чат" onClick={() => setMini(null)}><Copy/></WindowButton> : <>
-          <WindowButton label="Свернуть чат" onClick={() => setMini({left: screen.width - miniWidth - 20, top: screen.height - miniHeight - 20})}><Minus/></WindowButton>
-          <WindowButton label={maximized ? 'Восстановить размер' : 'Развернуть чат'} onClick={() => setMaximized(!maximized)}>{maximized ? <Copy/> : <Square/>}</WindowButton>
+          <WindowButton label="Свернуть чат" onClick={() => {
+            setNormal(normal ?? bounds);
+            setMini({left: screen.width - miniWidth - 20, top: screen.height - miniHeight - 20});
+          }}><Minus/></WindowButton>
+          <WindowButton label={maximized ? 'Восстановить размер' : 'Развернуть чат'} onClick={() => {
+            setNormal(normal ?? bounds);
+            setMaximized(!maximized);
+          }}>{maximized ? <Copy/> : <Square/>}</WindowButton>
         </>}
-        <WindowButton label="Закрыть окно и вернуть чат на дашборд" onClick={dock}><X/></WindowButton>
+        <WindowButton label={dock ? 'Закрыть окно и вернуть чат на дашборд' : 'Закрыть окно чата'} onClick={close}><X/></WindowButton>
       </div>}
     </header>
     {children}
@@ -123,7 +172,7 @@ export function ChatWindow({children}: {children: ReactNode}) {
       title="Изменить размер окна" onPointerDown={e => start(e, 'resize')}
       onKeyDown={e => {
         const delta: Record<string, [number, number]> = {ArrowRight: [16, 0], ArrowLeft: [-16, 0], ArrowUp: [0, -16], ArrowDown: [0, 16]};
-        if (bounds && delta[e.key]) { e.preventDefault(); resize(bounds, ...delta[e.key]); }
+        if (delta[e.key]) { e.preventDefault(); resize(bounds, ...delta[e.key]); }
       }}><MoveDiagonal2 size={13}/></button>}
-  </section>;
+  </section></>, host);
 }
