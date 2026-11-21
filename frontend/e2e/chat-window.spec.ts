@@ -27,7 +27,8 @@ test('список ответа раскрывается на месте, ссы
     calls++;
     if (calls === 1) return route.fulfill({status: 503, json: {detail: 'Сервис ИИ недоступен.'}});
     return route.fulfill({json: {answer: 'Записи смены.', incidents: [...ids, 'INC-DOES-NOT-EXIST'],
-      relations: [{ids: ids.slice(0, 2), reason: 'В записях совпадает сервис.'}], total: ids.length,
+      stats: {critical: snapshot.groups.critical.length, assigned: snapshot.groups.assigned.length},
+      relations: [{ids: ids.slice(0, 2), reason: 'В обеих записях нарушена передача сетевого трафика.'}], total: ids.length,
       epoch: snapshot.epoch, snapshotVersion: snapshot.snapshotVersion, asOf: snapshot.serverTime}});
   });
   const chat = page.locator('.incident-chat');
@@ -37,22 +38,37 @@ test('список ответа раскрывается на месте, ссы
   await expect(chat.getByRole('alert')).toContainText('Сервис ИИ недоступен.');
   await expect(input).toHaveValue('Покажи все инциденты');
   await chat.getByRole('button', {name: 'Повторить'}).click();
-  const links = chat.locator('.chat-incidents a');
-  await expect(links).toHaveCount(4);
+  const links = chat.locator('.chat-priorities a');
+  await expect(links).toHaveCount(2);
+  await expect(chat.locator('.chat-answer')).not.toContainText(/Снимок \d/);
+  await expect(chat.locator('.chat-stats [data-group=critical]')).toContainText(String(snapshot.groups.critical.length));
+  const showMore = chat.getByRole('button', {name: 'Показать остальные инциденты'});
   await expect(links.first()).toContainText(items[0].header);
   await expect(links.first()).toContainText(items[0].productName);
   await expect(chat.getByRole('link', {name: /DOES-NOT-EXIST/})).toHaveCount(0);
-  await chat.getByRole('button', {name: 'Показать ещё (' + (ids.length - 4) + ')'}).click();
-  await expect(links).toHaveCount(8);
+  await showMore.click();
+  await expect(links).toHaveCount(6);
   await chat.getByRole('button', {name: 'Открепить ИИ-чат'}).click();
   await page.setViewportSize({width: 340, height: 700});
   await expect(chat).toHaveAttribute('data-mode', 'floating');
   expect(await chat.getByRole('log').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
   await chat.getByRole('button', {name: 'Развернуть чат'}).click();
   await expect(chat).toHaveAttribute('data-mode', 'maximized');
-  await chat.getByRole('button', {name: 'Показать ещё (' + (ids.length - 8) + ')'}).click();
+  for (let i = 6; i < ids.length; i += 4) await showMore.click();
   await expect(links).toHaveCount(ids.length);
-  await expect(chat.getByRole('button', {name: /Показать ещё/})).toHaveCount(0);
+  await expect(showMore).toHaveCount(0);
+  for (const id of ids) {
+    const tone = ['critical','high','assigned'].find(group => snapshot.groups[group].includes(id)) ?? 'neutral';
+    const row = links.filter({has: page.locator('.chat-id', {hasText: id})}).first();
+    await expect(row).toHaveAttribute('data-tone', tone);
+    if (tone === 'critical') {
+      await expect(row.locator('.chat-incident-metric')).toHaveCSS('color', 'rgb(201, 39, 72)');
+      expect(await row.evaluate(el => getComputedStyle(el, '::before').backgroundColor)).toBe('rgb(243, 0, 54)');
+    }
+  }
+  await chat.getByRole('button', {name: 'Открыть инциденты'}).click();
+  await expect(chat.locator('.chat-relation .chat-incident-row')).toHaveCount(2);
+  await chat.getByRole('button', {name: 'Свернуть', exact: true}).click();
   await chat.getByRole('button', {name: 'Восстановить размер'}).click();
   await links.first().click();
   await expect(page).toHaveURL(new RegExp('/incidents/' + items[0].id + '$'));

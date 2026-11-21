@@ -23,7 +23,8 @@ export interface ChatAnswer extends Answer {
   incidents?: string[];
   relations?: {ids: string[]; reason: string}[];
   total?: number | null;
-  metric?: 'sla' | 'status';
+  metric?: 'auto' | 'sla' | 'status';
+  stats?: Partial<Record<GroupId, number>>;
 }
 export interface SummaryAnswer extends Answer {
   assessment: {

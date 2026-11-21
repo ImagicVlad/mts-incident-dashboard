@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
-import { ArrowUp, RotateCw, Sparkles } from 'lucide-react';
+import { ArrowUp, RotateCw, Sparkle, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { api, errorText, pathFor, type ChatAnswer, type SummaryAnswer, type Message, type Incident } from './api';
 import { useLive } from './live';
@@ -7,7 +7,7 @@ import { AnswerText, ChatResults } from './ChatReply';
 type ChatTurn = Message & {source?: ChatAnswer};
 
 export function Chat() {
-  const {snapshot,aiConfigured:configured} = useLive();
+  const {aiConfigured:configured} = useLive();
   const [messages,setMessages] = useState<ChatTurn[]>([]);
   const [draft,setDraft] = useState('');
   const [error,setError] = useState('');
@@ -50,8 +50,12 @@ export function Chat() {
     <div className="chat-log" role="log" aria-label="Переписка по инцидентам" ref={history}>
       <div className="chat-message"><strong>Ассистент</strong><p>{configured===false?'ИИ не настроен. Для чата требуется подключение провайдера на сервере.':'Что проверить по смене? Могу подсказать сроки инцидентов и назначенные команды.'}</p></div>
       {!messages.length && configured!==false && <div className="chat-suggestions">{['У какого инцидента ближайший срок?','Какие инциденты на координаторах?'].map(s=><button key={s} onClick={()=>{setDraft(s);input.current?.focus();}}>{s}</button>)}</div>}
-      {messages.map((m,k)=><div className={'chat-message '+(m.role==='user'?'from-user':'')} key={k}><strong>{m.role==='user'?'Вы':'Ассистент'}</strong><p><AnswerText text={m.content}/></p>
-        {m.source && <><ChatResults reply={m.source}/><small>Снимок {m.source.snapshotVersion}{m.source.stale || m.source.epoch!==snapshot?.epoch || m.source.snapshotVersion!==snapshot?.snapshotVersion?' · данные обновились':''}</small></>}</div>)}
+      {messages.map((m,k)=>m.source
+        ? <article className="chat-message chat-answer" key={k}>
+            <div className="chat-author"><span><Sparkle size={14} fill="currentColor" aria-hidden="true"/></span>Ассистент</div>
+            <ChatResults reply={m.source}/>
+          </article>
+        : <div className="chat-message from-user" key={k}><p><AnswerText text={m.content}/></p></div>)}
     </div>
     {pending && <p className="chat-status" role="status">Ассистент готовит ответ…</p>}
     {error && <p className="chat-error" role="alert">{error} <button className="text-action" onClick={submit}>Повторить</button></p>}
