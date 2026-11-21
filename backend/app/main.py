@@ -12,7 +12,7 @@ from fastapi.security import APIKeyCookie
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
-from .ai import AIService, ChatAnswer, ChatInput, SummaryAnswer, SummaryInput, incident_by_id
+from .ai import AIAnswer, AIService, ChatInput, SummaryAnswer, SummaryInput, incident_by_id
 from .config import Settings
 from .demo_data import prepare_default_demo
 from .domain import Incident, Snapshot
@@ -146,7 +146,7 @@ def create_app(settings: Settings | None = None, *, provider_transport=None) -> 
     async def summary(body: SummaryInput, request: Request, token: CurrentSession):
         return await request.app.state.ai.summary(body.incidentId)
 
-    @app.post("/api/ai/chat", response_model=ChatAnswer, tags=["ai"])
+    @app.post("/api/ai/chat", response_model=AIAnswer, tags=["ai"])
     async def chat(body: ChatInput, request: Request, token: CurrentSession):
         return await request.app.state.ai.chat(body)
 

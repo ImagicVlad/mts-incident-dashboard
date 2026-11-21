@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
-import { active, finished, overviewStatus, pathFor, remaining, type GroupId, type Incident } from './api';
+import { active, finished, pathFor, remaining, type GroupId, type Incident } from './api';
 import { useLive } from './live';
 
 const sections = [
@@ -11,6 +11,18 @@ const sections = [
   {id:'assigned',name:'На координаторах',note:'Следующий шаг — передача профильной команде',tone:'blue',icon:'users-group'},
   {id:'review',name:'Исследование',note:'Сбой устранён, идёт разбор причин',tone:'violet',icon:'file-search'},
 ] as const;
+function overviewStatus(item: Incident, onCoordinators: boolean) {
+  switch (item.stateEnum) {
+    case 'Assigned':
+      if (onCoordinators) return 'Назначен координаторам';
+      return item.assignedGroupName ? 'Назначен команде' : 'Назначен · команда не указана';
+    case 'WorkInProgress': return onCoordinators ? 'В работе у координаторов' : 'В работе';
+    case 'Research': return 'Разбор причин';
+    case 'Resolved':
+    case 'Closed': return 'Решён';
+    default: return item.state || item.stateEnum || 'Статус не указан';
+  }
+}
 export function Pill({item,label}:{item:Incident;label?:string}) {
   const tone = finished(item) ? 'done' : item.stateEnum==='Research' ? 'research' : 'active';
   const source = item.state || item.stateEnum || 'Статус не указан';
