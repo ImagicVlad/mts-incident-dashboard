@@ -7,10 +7,10 @@ import { useLive } from './live';
 import { Chat } from './Intelligence';
 
 const sections = [
-  {id:'critical',name:'Критические',note:'Требуют срочного решения',tone:'red'},
-  {id:'assigned',name:'На координаторах',note:'Ожидают передачи профильной команде',tone:'blue'},
-  {id:'high',name:'Высокий приоритет',note:'Повышенное внимание',tone:'amber'},
-  {id:'review',name:'Исследование',note:'Разбор причин',tone:'violet'},
+  {id:'critical',name:'Критические',note:'Требуют срочного решения',tone:'red',icon:'alert-triangle'},
+  {id:'assigned',name:'На координаторах',note:'Ожидают передачи профильной команде',tone:'blue',icon:'users-group'},
+  {id:'high',name:'Высокий приоритет',note:'Повышенное внимание',tone:'amber',icon:'chevrons-up'},
+  {id:'review',name:'Исследование',note:'Разбор причин',tone:'violet',icon:'file-search'},
 ] as const;
 function overviewStatus(item: Incident) {
   switch (item.stateEnum) {
@@ -72,7 +72,8 @@ export function Dashboard() {
     <div className="page-intro"><h1>Дашборд инцидентов</h1><div className="date-stamp">{dateFormat.format(now)}
       <span>Данные на {stamp(snapshot.dataUpdatedAt)} {zoneLabel}</span></div></div>
     <nav className="metrics" aria-label="Группы инцидентов">{sections.map(g=><a className={'metric '+g.tone} key={g.id} href={'#'+g.id} onClick={()=>setExpanded(p=>({...p,[g.id]:true}))}>
-      <span className="metric-name"><i/>{g.name}</span><strong>{String(snapshot.counts[g.id]).padStart(2,'0')}</strong><small>{g.note}</small></a>)}</nav>
+      <span className="metric-name"><svg width="20" height="20" aria-hidden="true" focusable="false"><use href={'/queue-icons.svg#'+g.icon}/></svg>{g.name}</span>
+      <strong>{String(snapshot.counts[g.id]).padStart(2,'0')}</strong><small>{g.note}</small></a>)}</nav>
     <div className="work-grid"><div className="queue">{sections.map(g=>renderGroup(g.id,g.name))}</div>
       <aside className="rail"><section className="focus"><div className="focus-pattern" aria-hidden="true"/><p className="eyebrow"><span className="signal red-dot"/>Ближайший срок</p>
         {nearest && nextClock ? <><strong className="big-clock">{nextClock.clock}</strong><p className="clock-note">{nextClock.overdue?'прошло со срока решения':'до срока решения'} · {stamp(nearest.deadline)} {zoneLabel}</p>

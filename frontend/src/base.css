@@ -41,7 +41,7 @@ h3 { font-size: 1.16rem; letter-spacing: -.025em; font-weight: 650; }
 .metric:hover, .incident:hover, .screen-card:hover { border-color: #9099a3; }
 .metric.red { background: #fff4f4; border-color: #f0c3c6; }
 .metric-name { display: inline-flex; align-items: center; gap: 8px; font-size: .92rem; font-weight: 620; }
-.metric-name i { width: 9px; height: 9px; border-radius: 2px; background: var(--accent); }
+.metric-name svg { flex: none; color: var(--accent); }
 .red { --accent: #e62334; } .blue { --accent: #4179ca; } .amber { --accent: #b9780d; } .violet { --accent: #8360b7; }
 .metric strong { font-size: 2.65rem; line-height: 1.1; margin-top: 9px; letter-spacing: -.055em; font-weight: 650; font-variant-numeric: tabular-nums; }
 .metric.red strong, .priority-red { color: #be1022; }
