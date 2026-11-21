@@ -8,8 +8,8 @@ import { Chat } from './Intelligence';
 
 const sections = [
   {id:'critical',name:'Критические',note:'Требуют срочного решения',tone:'red',icon:'alert-triangle'},
-  {id:'assigned',name:'На координаторах',note:'Ожидают передачи профильной команде',tone:'blue',icon:'users-group'},
   {id:'high',name:'Высокий приоритет',note:'Повышенное внимание',tone:'amber',icon:'chevrons-up'},
+  {id:'assigned',name:'На координаторах',note:'Ожидают передачи профильной команде',tone:'blue',icon:'users-group'},
   {id:'review',name:'Исследование',note:'Разбор причин',tone:'violet',icon:'file-search'},
 ] as const;
 function overviewStatus(item: Incident) {
