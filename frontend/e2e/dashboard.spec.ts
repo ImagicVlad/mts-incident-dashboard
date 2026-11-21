@@ -78,6 +78,48 @@ test('краткие карточки показывают команду и ж�
   } finally { await replace(original); }
 });
 
+test('название команды сокращается по ширине карточки и раскрывается при откреплении чата', async ({page}) => {
+  const original = await readFile(file, 'utf8');
+  const [source, ...others] = JSON.parse(original);
+  const team = 'Группа сопровождения региональной платёжной платформы';
+  const long = {...source, assignedGroupName: team};
+  const short = {...source, id: 'TEAM-0000', sysId: 'team-layout-test', assignedGroupName: 'ИТ'};
+  const critical = page.getByTestId('group-critical');
+  const longCard = critical.locator(`[data-incident-id="${long.id}"]`);
+  const shortCard = critical.locator(`[data-incident-id="${short.id}"]`);
+  const value = longCard.locator('.card-team b');
+  const clipped = () => value.evaluate(el => el.scrollWidth > el.clientWidth);
+  try {
+    await replace(JSON.stringify([long, short, ...others]));
+    await page.goto('/login');
+    await page.getByRole('button', {name: 'Войти', exact: true}).click();
+    await expect(value).toHaveText(team);
+    await expect(value).toHaveAttribute('title', team);
+    await expect(value).toHaveCSS('text-overflow', 'ellipsis');
+    await expect(value).toHaveCSS('white-space', 'nowrap');
+
+    for (const width of [1920, 1280, 820, 390, 320, 1920]) {
+      await page.setViewportSize({width, height: 900});
+      if (width === 1920) expect(await clipped()).toBe(false);
+      if (width <= 390) expect(await clipped()).toBe(true);
+      const shortValue = shortCard.locator('.card-team b');
+      expect(await shortValue.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+      const fullHeight = await longCard.evaluate(el => el.getBoundingClientRect().height);
+      expect(await shortCard.evaluate(el => el.getBoundingClientRect().height)).toBe(fullHeight);
+    }
+
+    await page.setViewportSize({width: 1100, height: 900});
+    await value.hover();
+    expect(await clipped()).toBe(true);
+    await page.getByRole('button', {name: 'Открепить ИИ-чат'}).click();
+    await expect.poll(clipped).toBe(false);
+    await page.getByRole('button', {name: 'Закрыть окно и вернуть чат на дашборд'}).click();
+    await expect.poll(clipped).toBe(true);
+    await longCard.click();
+    await expect(page.locator('.facts').getByText(team, {exact: true})).toBeVisible();
+  } finally { await replace(original); }
+});
+
 test('сводка показывает пример назначения и скрывает совет после передачи команде', async ({page}) => {
   const original = await readFile(file, 'utf8');
   const records = JSON.parse(original);

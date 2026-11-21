@@ -49,7 +49,10 @@ function Card({item,group,now,animate,priority,onCoordinators}:{item:Incident;gr
       {(hasMetadata || countdown || restoredAt) && <div className="card-foot">
         {hasMetadata && <div className="card-meta">
           {item.submitDate && <span>Начало <b><time dateTime={item.submitDate}>{stamp(item.submitDate)}</time></b></span>}
-          {item.assignedGroupName && <span className="card-team">Текущая команда <b>{item.assignedGroupName}</b></span>}
+          {item.assignedGroupName && <span className="card-team">
+            <span>Текущая команда</span>{' '}
+            <b className="min-w-0 truncate" title={item.assignedGroupName}>{item.assignedGroupName}</b>
+          </span>}
           {coordinatorSince && <span className="coordinator-since">У координаторов с <b><time dateTime={coordinatorSince}>{stamp(coordinatorSince)}</time></b></span>}
         </div>}
         {countdown && <strong className={'time-left'+(countdown.overdue?' overdue':'')}>{countdown.text}</strong>}

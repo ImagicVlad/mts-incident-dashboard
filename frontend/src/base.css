@@ -78,7 +78,11 @@ h3 { font-size: 1.16rem; letter-spacing: -.025em; font-weight: 650; }
 .active { background: #eef1f5; color: #47556b; } .done { background: #e3f3ea; color: #18673d; } .research { background: #f1eaf8; color: #705092; }
 .card-foot { display: flex; align-items: flex-end; gap: 16px; font-size: .83rem; color: var(--muted); }
 .card-meta { flex: 1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; }
-.card-team { flex: 1 1 12rem; min-width: 0; }
+.card-team {
+  flex: 1 1 12rem; min-width: 0;
+  display: grid; grid-template-columns: fit-content(75%) minmax(0, 1fr);
+  align-items: baseline; column-gap: .25em;
+}
 .coordinator-since { flex-basis: 100%; }
 .card-foot b { font-weight: 580; color: #343c46; }
 .time-left { flex: none; max-width: 40%; margin-inline-start: auto; text-align: right; font: 600 .83rem var(--mono); }
