@@ -5,6 +5,7 @@ export interface Incident {
   description: string | null; shortDescription: string | null; assignedGroupName: string | null;
   assignedEmployee: string | null; deadline: string | null; submitDate: string | null;
   completionDate: string | null; solution: string | null; itsmUrl: string | null;
+  lastAssignmentToTeamDateTime: string | null;
   service?: string | null; diagnostics: string[];
 }
 export interface Notice { eventId: string; incidentId: string; kind: string; label: string; time: string }

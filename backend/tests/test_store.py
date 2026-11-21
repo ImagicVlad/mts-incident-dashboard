@@ -89,6 +89,23 @@ def test_nearby_deadlines_sort_chronologically_with_null_last():
     assert classify(items)["critical"] == ["B", "A", "C"]
 
 
+def test_order_by_urgency_and_time_with_coordinators_or_recent_resolution():
+    early = "2026-11-21T10:00:00+03:00"
+    late = "2026-11-21T08:00:00Z"
+    rows = [
+        row("R2", stateEnum="Research", lastAssignmentToTeamDateTime=early, completionDate=early),
+        row("R1", stateEnum="Research", lastAssignmentToTeamDateTime=early, completionDate=late),
+        row("R0", stateEnum="Research"),
+        row("N", lastAssignmentToTeamDateTime=late),
+        row("C0", priorityId=4),
+        row("C1", priorityId=3, deadline=late, lastAssignmentToTeamDateTime=late),
+    ]
+    items = normalize_records([dict(record, assignedGroupName=COORDINATORS) for record in rows])
+    groups = classify(items, now=datetime(2026, 11, 21, 9, tzinfo=UTC))
+    assert groups["assigned"] == ["C1", "C0", "R1", "R2", "N", "R0"]
+    assert groups["review"] == ["R1", "R2", "R0"]
+
+
 def test_events_content_comparison_and_recovery(tmp_path):
     async def scenario():
         source = tmp_path / "incidents.json"

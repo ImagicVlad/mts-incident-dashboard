@@ -1,22 +1,24 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, Forward } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { active, finished, pathFor, remaining, type GroupId, type Incident } from './api';
 import { useLive } from './live';
 import { Chat } from './Intelligence';
 
 const sections = [
-  {id:'critical',name:'Критические',note:'Требуют срочного решения',tone:'red',icon:'alert-triangle'},
-  {id:'high',name:'Высокий приоритет',note:'Повышенное внимание',tone:'amber',icon:'chevrons-up'},
-  {id:'assigned',name:'На координаторах',note:'Ожидают передачи профильной команде',tone:'blue',icon:'users-group'},
-  {id:'review',name:'Исследование',note:'Разбор причин',tone:'violet',icon:'file-search'},
+  {id:'critical',name:'Критические',note:'Наивысший приоритет или высокий с истекающим либо нарушенным сроком',tone:'red',icon:'alert-triangle'},
+  {id:'high',name:'Высокий приоритет',note:'Активные инциденты до порога критичности',tone:'amber',icon:'chevrons-up'},
+  {id:'assigned',name:'На координаторах',note:'Следующий шаг — передача профильной команде',tone:'blue',icon:'users-group'},
+  {id:'review',name:'Исследование',note:'Сбой устранён, идёт разбор причин',tone:'violet',icon:'file-search'},
 ] as const;
-function overviewStatus(item: Incident) {
+function overviewStatus(item: Incident, onCoordinators: boolean) {
   switch (item.stateEnum) {
-    case 'Assigned': return 'Назначен';
-    case 'WorkInProgress': return 'В работе';
-    case 'Research': return 'Исследование';
+    case 'Assigned':
+      if (onCoordinators) return 'Назначен координаторам';
+      return item.assignedGroupName ? 'Назначен команде' : 'Назначен · команда не указана';
+    case 'WorkInProgress': return onCoordinators ? 'В работе у координаторов' : 'В работе';
+    case 'Research': return 'Разбор причин';
     case 'Resolved':
     case 'Closed': return 'Решён';
     default: return item.state || item.stateEnum || 'Статус не указан';
@@ -28,21 +30,25 @@ export function Pill({item,label}:{item:Incident;label?:string}) {
   return <span className={'pill '+tone} title={label && label!==source ? source : undefined}>{label ?? source}</span>;
 }
 type PriorityQueue = 'high' | 'critical';
-function Card({item,group,now,animate,priority}:{item:Incident;group:GroupId;now:number;animate:boolean;priority?:PriorityQueue}) {
+function Card({item,group,now,animate,priority,onCoordinators}:{item:Incident;group:GroupId;now:number;animate:boolean;priority?:PriorityQueue;onCoordinators:boolean}) {
   const {formats:{stamp}} = useLive();
   const reduced = useReducedMotion();
   const countdown = active(item) ? remaining(item.deadline,now) : null;
+  const research = item.stateEnum === 'Research';
   return <motion.div initial={animate && !reduced ? {opacity:0,y:6} : false} animate={{opacity:1,y:0}} transition={{duration:reduced?0:0.24}}>
     <Link data-incident-id={item.id} data-priority={priority} to={pathFor(item.id)} className={group==='history'?'incident resolved':'incident'}>
-      <div className="card-top"><span className="mono">{item.id}</span><span className="product">{item.productName || 'Продукт не указан'}</span><Pill item={item} label={overviewStatus(item)}/></div>
+      <div className="card-top"><span className="mono">{item.id}</span><span className="product">{item.productName || 'Продукт не указан'}</span><Pill item={item} label={overviewStatus(item,onCoordinators)}/></div>
       <h3>{item.header || 'Без заголовка'}</h3>
       {group === 'critical' && <p className="critical-reason">{item.priorityId === 4
         ? 'Наивысший приоритет'
         : 'Высокий приоритет · ' + (countdown?.overdue ? 'срок истёк' : 'срок близко')}</p>}
-      <div className="card-foot"><span>Начало <b>{stamp(item.submitDate)}</b></span><span>Команда <b className={item.assignedGroupName?'':'team-pending'} title={item.assignedGroupName || 'Команда не указана'}>{item.assignedGroupName || '?'}</b></span><span>Исполнитель <b>{item.assignedEmployee || 'Не указан'}</b></span>
-        <span>{item.stateEnum==='Research'?'Срок из источника':'Срок'} <b>{stamp(item.deadline)}</b></span>
+      {onCoordinators && <p className="handoff-note"><Forward size={15} aria-hidden="true"/>
+        {research ? 'Передать разбор причин профильной команде' : 'Передать инцидент профильной команде'}</p>}
+      <div className="card-foot"><span>Начало <b>{stamp(item.submitDate)}</b></span><span>Текущая команда <b className={item.assignedGroupName?'':'team-pending'} title={item.assignedGroupName || 'Команда не указана'}>{item.assignedGroupName || '?'}</b></span><span>Исполнитель <b>{item.assignedEmployee || 'Не указан'}</b></span>
+        {group === 'assigned' && item.lastAssignmentToTeamDateTime && <span>У координаторов с <b>{stamp(item.lastAssignmentToTeamDateTime)}</b></span>}
+        {(!research || item.deadline) && <span>Срок устранения <b>{stamp(item.deadline)}</b></span>}
         {countdown && <strong className={'time-left'+(countdown.overdue?' overdue':'')}>{countdown.text}</strong>}
-        {(finished(item) || item.stateEnum==='Research') && item.completionDate && <strong className="time-left">Устранён {stamp(item.completionDate)}</strong>}
+        {(finished(item) || research) && item.completionDate && <strong className="time-left">Сбой устранён {stamp(item.completionDate)}</strong>}
       </div>
     </Link>
   </motion.div>;
@@ -53,6 +59,7 @@ export function Dashboard() {
   useEffect(()=>{document.title='Дашборд инцидентов · МТС';},[]);
   if (!snapshot?.hasSnapshot) return <main className="container waiting"><h1>Дашборд инцидентов</h1><p role="status">{bootstrapError || snapshot?.sourceStatus==='error' ? 'Данные недоступны' : 'Загружаем инциденты…'}</p></main>;
   const byId = new Map(snapshot.incidents.map(i=>[i.id,i]));
+  const onCoordinators = new Set(snapshot.groups.assigned);
   const priorityById = new Map<string, PriorityQueue>();
   for (const queue of ['high', 'critical'] as const) {
     for (const id of snapshot.groups[queue]) priorityById.set(id, queue);
@@ -68,7 +75,7 @@ export function Dashboard() {
         <span className="category-name">{name}</span><span className="count">{ids.length}</span><ChevronDown size={16}/></button></h2>
       <div id={'list-'+id} className="incident-list">{shown.map(key=>{
         const item=byId.get(key);
-        return item && <Card key={key} item={item} group={id} priority={priorityById.get(key)} now={now} animate={newCards.has(id+'/'+key)}/>;
+        return item && <Card key={key} item={item} group={id} priority={priorityById.get(key)} onCoordinators={onCoordinators.has(key)} now={now} animate={newCards.has(id+'/'+key)}/>;
       })}
       {!ids.length && <p className="queue-empty">{id==='history'?'Завершённых инцидентов пока нет.':'В этой категории нет инцидентов.'}</p>}</div>
     </section>;

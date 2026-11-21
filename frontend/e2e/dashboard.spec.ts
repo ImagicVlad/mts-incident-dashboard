@@ -113,3 +113,58 @@ test('инцидент меняет очередь при достижении �
     await expect(criticalCount).toHaveText('01');
   } finally { await replace(initial); }
 });
+
+test('команда координаторов и стадия исследования меняются независимо', async ({page}) => {
+  const initial = await readFile(file, 'utf8');
+  const issue = {
+    ...JSON.parse(initial)[0], id:'DEMO-COORD', priorityId:4, priority:'Наивысший',
+    stateEnum:'Assigned', stateId:0, state:'Назначен', assignedGroupName:null,
+    completionDate:null, deadline:new Date(Date.now() + 3_600_000).toISOString(),
+  };
+  const publish = () => replace(JSON.stringify([issue]));
+  const selector = `[data-incident-id="${issue.id}"]`;
+  const assigned = page.getByTestId('group-assigned').locator(selector);
+  const research = page.getByTestId('group-review').locator(selector);
+  const critical = page.getByTestId('group-critical').locator(selector);
+  const history = page.getByTestId('group-history').locator(selector);
+  const reviewAction = 'Передать разбор причин профильной команде';
+  try {
+    await publish();
+    await page.goto('/login');
+    await page.getByRole('button', {name:'Войти', exact:true}).click();
+    await expect(critical).toBeVisible();
+    await expect(assigned).toHaveCount(0);
+
+    issue.assignedGroupName = 'КЦ ИТ Координаторы Массовых Инцидентов';
+    await publish();
+    await expect(assigned.locator('.pill')).toHaveText('Назначен координаторам');
+    await expect(assigned).toContainText('Передать инцидент профильной команде');
+
+    Object.assign(issue, {stateEnum:'WorkInProgress', stateId:2, state:'Выполняется'});
+    await publish();
+    await expect(assigned.locator('.pill')).toHaveText('В работе у координаторов');
+
+    Object.assign(issue, {stateEnum:'Research', stateId:20, state:'Исследование ситуации',
+      completionDate:new Date().toISOString()});
+    await publish();
+    for (const card of [assigned, research]) {
+      await expect(card.locator('.pill')).toHaveText('Разбор причин');
+      await expect(card).not.toContainText(/Осталось|Просрочен/);
+    }
+    await expect(assigned).toContainText(reviewAction);
+    await expect(critical).toHaveCount(0);
+    await expect(history).toHaveCount(0);
+
+    issue.assignedGroupName = 'Платёжные сервисы';
+    await publish();
+    await expect(research).toContainText(issue.assignedGroupName);
+    await expect(research).not.toContainText(reviewAction);
+    await expect(assigned).toHaveCount(0);
+
+    Object.assign(issue, {stateEnum:'Closed', stateId:10, state:'Закрыт'});
+    await publish();
+    await expect(history.locator('.pill')).toHaveText('Решён');
+    await expect(research).toHaveCount(0);
+    await expect(assigned).toHaveCount(0);
+  } finally { await replace(initial); }
+});

@@ -19,7 +19,7 @@ export function Details() {
   const rows = [
     ['Продукт',item.productName],['Сервис',item.service],['Приоритет',item.priority],
     ['Команда назначения',item.assignedGroupName],['Исполнитель',item.assignedEmployee],
-    ['Время возникновения',stamp(item.submitDate)], [research?'Срок из источника':'Срок решения',stamp(item.deadline)],
+    ['Время возникновения',stamp(item.submitDate)], ['Плановый срок устранения',stamp(item.deadline)],
     ...(item.completionDate?[['Завершение по данным источника',stamp(item.completionDate)]]:[]),
   ];
   const description = item.description || item.shortDescription;
@@ -32,8 +32,9 @@ export function Details() {
       {item.solution && <section className="record-text"><h3>Решение из источника</h3><p>{item.solution}</p></section>}
       {item.diagnostics?.length>0 && <details className="record-text"><summary>Замечания к записи</summary><ul>{item.diagnostics.map((d,k)=><li key={k}>{d}</li>)}</ul></details>}
     </section><aside>
-      <section className="focus compact-focus"><div className="focus-pattern" aria-hidden="true"/><p className="eyebrow"><span className="signal red-dot"/>{research ? 'Стадия исследования' : finished(item) ? 'Завершение' : 'Срок решения'}</p>
+      <section className="focus compact-focus"><div className="focus-pattern" aria-hidden="true"/><p className="eyebrow"><span className="signal red-dot"/>{research ? 'Сбой устранён' : finished(item) ? 'Завершение' : 'Срок решения'}</p>
         <strong className="big-clock">{time((research || finished(item)) ? item.completionDate : item.deadline)}</strong>
+        {research && <p>Идёт разбор причин</p>}
         <p className="clock-note">{research || finished(item) ? (item.completionDate?'По данным источника · '+stamp(item.completionDate)+' '+zoneLabel:'Дата завершения не указана') : (countdown?.text || 'Срок не указан')}</p>
       </section>
       <Summary key={item.id} item={item}/>

@@ -238,13 +238,20 @@ def classify(items: dict[str, Incident], now: datetime | None = None) -> dict[st
     for item in items.values():
         for group in memberships(item, now):
             groups[group].append(item.id)
-    for key, ids in groups.items():
-        # Nulls last, then deterministic ordering even when deadlines match.
-        if key == "history":
-            ids.sort()
-            ids.sort(key=lambda id_: items[id_].completionDate or "", reverse=True)
-        else:
-            ids.sort(key=lambda id_: (items[id_].deadline is None, items[id_].deadline or "", id_))
+    for key in ("critical", "high"):
+        groups[key].sort(key=lambda id_: (items[id_].deadline is None, items[id_].deadline or "", id_))
+
+    critical_ids = set(groups["critical"])
+    groups["assigned"].sort(key=lambda id_: (
+        id_ not in critical_ids,
+        items[id_].lastAssignmentToTeamDateTime is None,
+        items[id_].lastAssignmentToTeamDateTime or "",
+        id_,
+    ))
+    for key in ("review", "history"):
+        # Keep equal (or missing) completion dates in incident ID order.
+        groups[key].sort()
+        groups[key].sort(key=lambda id_: items[id_].completionDate or "", reverse=True)
     return groups
 
 

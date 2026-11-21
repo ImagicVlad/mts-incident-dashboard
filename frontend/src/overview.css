@@ -11,6 +11,8 @@
   .dashboard-bar, .overview { --attention: #ac4a00; --attention-tint: #fff0df; }
   .overview { --high-accent: #cd630f; }
   .critical-reason { margin: 0 0 8px; color: #9d2332; font-size: .83rem; font-weight: 600; }
+  .handoff-note { display: flex; align-items: baseline; gap: 6px; margin: 0 0 10px; color: #325c90; font-size: .85rem; font-weight: 600; }
+  .handoff-note svg { flex: none; align-self: center; }
   .card-foot .team-pending { display: inline-block; min-width: 1.4em; padding: 1px 4px; border-radius: 5px; color: var(--attention); background: var(--attention-tint); text-align: center; font-weight: 700; line-height: 1.25; }
   .dashboard-bar { position: sticky; top: 0; z-index: 20; }
   .dashboard-nav { display: grid; grid-template-columns: 1fr min(100% - 15rem, 560px) 1fr; align-items: center; }
