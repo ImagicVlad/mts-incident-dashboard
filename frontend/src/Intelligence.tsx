@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect, type ReactNode } from 'react';
 import { ArrowUp, RotateCw, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { api, errorText, pathFor, type Answer, type Message, type Incident } from './api';
+import { api, errorText, pathFor, type Answer, type SummaryAnswer, type Message, type Incident } from './api';
 import { useLive } from './live';
 
 function AnswerText({text}:{text:string}) {
@@ -64,22 +64,34 @@ export function Chat() {
 
 export function Summary({item}:{item:Incident}) {
   const {snapshot,aiConfigured:configured,formats:{stamp,zoneLabel}} = useLive();
-  const [result,setResult] = useState<{answer:Answer;fields:string} | null>(null);
+  const [result,setResult] = useState<SummaryAnswer | null>(null);
   const [pending,setPending] = useState(false), [error,setError] = useState('');
   const abort = useRef<AbortController | null>(null);
   useEffect(()=>()=>abort.current?.abort(),[]);
-  const fields = JSON.stringify(item);
-  const stale = result && (result.answer.stale || result.fields!==fields || result.answer.epoch!==snapshot?.epoch);
+  const stale = result && (result.stale || result.epoch!==snapshot?.epoch || result.snapshotVersion!==snapshot?.snapshotVersion);
+  const notes = result?.assessment;
+  const routing = !stale && notes?.routing;
   const generate = async () => {
     if (pending) return;
     const controller = new AbortController(); abort.current=controller;
     setPending(true); setError('');
-    try {const answer=await api<Answer>('ai/summary',{incidentId:item.id},controller.signal);setResult({answer,fields});}
+    try {setResult(await api<SummaryAnswer>('ai/summary',{incidentId:item.id},controller.signal));}
     catch(e) {if(!controller.signal.aborted)setError(errorText(e));} finally {setPending(false);}
   };
   return <section className="ai-note"><h2 className="eyebrow"><Sparkles size={16}/> ИИ-сводка</h2>
     {configured===false && <p>ИИ не настроен. Для сводки требуется подключение провайдера на сервере.</p>}
-    {result && <><p className="answer-text"><AnswerText text={result.answer.answer}/></p><small>Снимок {result.answer.snapshotVersion} · {stamp(result.answer.asOf)} {zoneLabel}{stale?' · данные изменились':''}</small></>}
+    {notes && <div className="summary-sections">
+      <p className="answer-text"><AnswerText text={notes.situation}/></p>
+      <section><h3>Влияние</h3><p className="answer-text"><AnswerText text={notes.impact}/></p></section>
+      {routing && <section className="summary-routing"><h3>Рекомендация по команде</h3>
+        {routing.team && <strong>{routing.team}</strong>}
+        <p>{routing.reason}</p>
+        {routing.exampleId && <Link to={pathFor(routing.exampleId)}>Похожий инцидент · {routing.exampleId}</Link>}
+      </section>}
+      <section><h3>Что проверить</h3><p className="answer-text"><AnswerText text={notes.check}/></p></section>
+    </div>}
+    {result && <>{!notes && <p className="answer-text"><AnswerText text={result.answer}/></p>}
+      <small>Снимок {result.snapshotVersion} · {stamp(result.asOf)} {zoneLabel}{stale?' · данные изменились':''}</small></>}
     {error && <p className="form-error" role="alert">{error}</p>}
     {configured!==false && <button className="summary-action" disabled={pending} onClick={generate}><RotateCw size={14}/>{pending?'Готовим сводку…':error?'Повторить':result?'Обновить сводку':'Сформировать сводку'}</button>}
   </section>;

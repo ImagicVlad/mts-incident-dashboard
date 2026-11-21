@@ -1,5 +1,4 @@
 import asyncio
-import hashlib
 import json
 import re
 import time
@@ -9,9 +8,12 @@ from typing import Literal
 
 import httpx
 from fastapi import HTTPException
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from .config import Settings
+from .assessment import (
+    SUMMARY_PROMPT, IncidentAssessment, ModelAssessment, assemble_assessment, routing_examples,
+)
 
 SYSTEM_PROMPT = (
     "Ты помощник координатора инцидентов. Отвечай кратко по-русски. Используй только факты "
@@ -22,7 +24,6 @@ SYSTEM_PROMPT = (
     "Наличие решения в тексте не означает перехода в завершённое состояние. "
     "Записи с dataOrigin=defense-scenario относятся к сценарию защиты."
 )
-PROMPT_VERSION = "2"
 FIELDS = ("id", "dataOrigin", "header", "productName", "service", "state", "stateEnum", "priority",
           "priorityId", "assignedGroupName", "assignedEmployee", "submitDate", "deadline",
           "completionDate", "description", "shortDescription", "solution")
@@ -60,6 +61,10 @@ class AIAnswer(BaseModel):
     asOf: str
     incidentId: str | None = None
     stale: bool = False
+
+
+class SummaryAnswer(AIAnswer):
+    assessment: IncidentAssessment
 
 
 def incident_by_id(snapshot: dict, id_: str) -> dict:
@@ -117,8 +122,8 @@ class AIService:
         self.client = client
         self.calls: deque[float] = deque()
         self.slots = asyncio.Semaphore(settings.llm_max_concurrent)
-        self.cache: OrderedDict[str, tuple[float, AIAnswer]] = OrderedDict()
-        self.pending: dict[str, asyncio.Task] = {}
+        self.cache: OrderedDict[tuple, tuple[float, SummaryAnswer]] = OrderedDict()
+        self.pending: dict[tuple, asyncio.Task] = {}
 
     def capture(self) -> dict:
         if not self.settings.ai_configured:
@@ -147,6 +152,8 @@ class AIService:
                    "messages": [{"role": "system", "content": SYSTEM_PROMPT},
                                 {"role": "user", "content": json.dumps(data, ensure_ascii=False)},
                                 *messages]}
+        if incident_id is not None:
+            payload["response_format"] = {"type": "json_object"}
         url = self.settings.llm_base_url.rstrip("/") + "/chat/completions"
         headers = {"Authorization": "Bearer " + self.settings.llm_api_key.get_secret_value()}
         async with self.slots:
@@ -181,10 +188,9 @@ class AIService:
     async def summary(self, incident_id: str):
         snap = self.capture()
         row = incident_by_id(snap, incident_id)
-        material = [PROMPT_VERSION, self.settings.llm_model, snap["epoch"], [row.get(k) for k in FIELDS]]
-        key = hashlib.sha256(json.dumps(material, ensure_ascii=False).encode()).hexdigest()
+        key = (snap["epoch"], snap["snapshotVersion"], incident_id)
         entry = self.cache.get(key)
-        if entry and time.monotonic() < entry[0] and entry[1].snapshotVersion == snap["snapshotVersion"]:
+        if entry and time.monotonic() < entry[0]:
             return self.mark_version(entry[1])
         if key not in self.pending:
             self.pending[key] = asyncio.create_task(self._build_summary(key, snap, row))
@@ -193,10 +199,18 @@ class AIService:
 
     async def _build_summary(self, key, snap, row):
         try:
-            prompt = ("Составь сводку по записи. Дай номер, статус, продукт, назначение и важные сроки. "
-                      "Отдели проверяемые факты от риска и предложенного следующего действия.")
-            result = await self.request(snap, {"incident": facts(row, snap["serverTime"], detailed=True)},
-                                        [{"role": "user", "content": prompt}], row["id"])
+            context = {"incident": facts(row, snap["serverTime"], detailed=True)}
+            examples = routing_examples(row, snap["incidents"])
+            if examples is not None:
+                context["routingExamples"] = examples
+            response = await self.request(snap, context, [{"role": "user", "content": SUMMARY_PROMPT}], row["id"])
+            try:
+                notes = ModelAssessment.model_validate_json(response.answer)
+            except ValidationError:
+                raise HTTPException(502, "Не удалось прочитать ИИ-сводку. Попробуйте ещё раз.") from None
+            assessment = assemble_assessment(notes, examples)
+            result = SummaryAnswer(**response.model_dump(exclude={"answer"}),
+                                   answer=assessment.as_text(), assessment=assessment)
             self.cache[key] = time.monotonic() + self.settings.llm_summary_ttl_seconds, result
             self.cache.move_to_end(key)
             if len(self.cache) > 128:

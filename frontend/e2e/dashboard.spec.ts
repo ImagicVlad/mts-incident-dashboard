@@ -7,6 +7,44 @@ async function replace(contents: string) {
   await rename(file + '.writing', file);
 }
 
+test('сводка показывает пример назначения и скрывает совет после передачи команде', async ({page}) => {
+  const original = await readFile(file, 'utf8');
+  const records = JSON.parse(original);
+  const [incident, example] = records;
+  incident.assignedGroupName = null;
+  try {
+    await replace(JSON.stringify(records));
+    await page.route('**/api/health', route => route.fulfill({json: {
+      status: 'ok', aiConfigured: true, displayTimezone: 'Europe/Moscow',
+    }}));
+    await page.goto('/login');
+    await page.getByRole('button', {name: 'Войти', exact: true}).click();
+    await expect(page).toHaveURL(/\/dashboard$/);
+    await page.goto('/incidents/' + incident.id);
+    const section = page.locator('section.ai-note');
+    await page.route('**/api/ai/summary', async route => {
+      const live = await page.request.get('/api/incidents');
+      const {epoch, snapshotVersion, serverTime, incidents} = await live.json();
+      const assigned = incidents.find((row: {id: string}) => row.id === incident.id).assignedGroupName;
+      await route.fulfill({json: {epoch, snapshotVersion, asOf: serverTime, answer: 'Сводка', assessment: {
+        situation: 'Пробные платежи задерживаются.', impact: 'Два платежа находятся в обработке.',
+        check: 'Сверить время зачисления двух платежей.',
+        routing: assigned ? null : {team: 'Расчёты', exampleId: example.id, reason: 'Совпадает сервис зачисления.'},
+      }}});
+    });
+    await section.getByRole('button', {name: 'Сформировать сводку'}).click();
+    await expect(section.getByRole('heading', {name: 'Что проверить'})).toBeVisible();
+    await expect(section.getByRole('link', {name: 'Похожий инцидент · ' + example.id})).toHaveAttribute('href', '/incidents/' + example.id);
+    incident.assignedGroupName = 'Расчёты';
+    await replace(JSON.stringify(records));
+    await expect(section.getByText(/данные изменились/)).toBeVisible();
+    await expect(section.getByRole('heading', {name: 'Рекомендация по команде'})).toHaveCount(0);
+    await section.getByRole('button', {name: 'Обновить сводку'}).click();
+    await expect(section.getByText(/данные изменились/)).toHaveCount(0);
+    await expect(section.getByRole('link')).toHaveCount(0);
+  } finally { await replace(original); }
+});
+
 test('две вкладки получают изменения, переживают ошибку файла и возвращаются к сессии', async ({page,context}) => {
   const initial = await readFile(file, 'utf8');
   const data = JSON.parse(initial) as Array<Record<string, string | number | boolean | null>>;

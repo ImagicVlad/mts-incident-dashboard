@@ -19,6 +19,12 @@ export interface Snapshot {
 }
 export interface Account { login: string; displayName: string }
 export interface Answer { answer: string; epoch: string; snapshotVersion: number; asOf: string; stale?: boolean }
+export interface SummaryAnswer extends Answer {
+  assessment: {
+    situation: string; impact: string; check: string;
+    routing: { team: string | null; exampleId: string | null; reason: string } | null;
+  };
+}
 export interface Message { role: 'assistant' | 'user'; content: string }
 export const pathFor = (id: string) => '/incidents/' + encodeURIComponent(id);
 export class ApiError extends Error {

@@ -8,11 +8,14 @@ import uvicorn
 from fastapi.testclient import TestClient
 
 from app.config import Settings
+from app.domain import COORDINATORS
 from app.main import create_app
 
 CREDS = {"login": "operator", "password": "test-password"}
 ROW = {"id": "demo-001", "header": "Задержка начислений", "stateEnum": "Assigned",
        "state": "Назначен", "stateId": 0, "priorityId": 4, "deadline": "2030-01-01T00:00:00Z"}
+NOTES = {"situation": "Зачисление задерживается.", "impact": "Масштаб уточняется.",
+         "check": "Сверить время операции со временем зачисления."}
 
 
 @pytest.fixture
@@ -71,7 +74,8 @@ def test_summary_cache_chat_context_and_input_contract(source):
         body = json.loads(req.content)
         calls.append(body)
         assert req.headers["authorization"] == "Bearer test-key"
-        return httpx.Response(200, json={"choices": [{"message": {"content": "demo-001 проверен"}}]})
+        content = json.dumps(NOTES) if "response_format" in body else "demo-001 проверен"
+        return httpx.Response(200, json={"choices": [{"message": {"content": content}}]})
 
     app = create_app(settings(source, llm_api_key="test-key"), provider_transport=httpx.MockTransport(provider))
     with TestClient(app) as client:
@@ -108,6 +112,47 @@ def test_provider_error_is_sanitized(source, upstream, expected):
         response = client.post("/api/ai/summary", json={"incidentId": "demo-001"})
         assert response.status_code == expected
         assert "sensitive" not in response.text and "test-key" not in response.text
+
+
+@pytest.mark.parametrize(("owner", "stage", "candidate", "expected"), [
+    (None, "Assigned", 1, "Расчёты"), ("?", "WorkInProgress", 1, "Расчёты"),
+    (COORDINATORS, "Research", 1, "Расчёты"), (None, "Assigned", 20, "unknown"),
+    (None, "Assigned", None, "unknown"), ("Уже назначена", "Assigned", 1, None),
+    (None, "Resolved", 1, None), (COORDINATORS, "Closed", 1, None),
+])
+def test_summary_team_advice(source, owner, stage, candidate, expected):
+    current = {**ROW, "assignedGroupName": owner, "stateEnum": stage, "service": "Зачисление"}
+    example = {**ROW, "id": "old", "stateEnum": "Closed", "service": "Зачисление",
+               "assignedGroupName": "Расчёты", "assignedEmployee": "Имя из другой записи"}
+    unrelated = {**ROW, "id": "other", "header": "Пропала связь", "assignedGroupName": "Сети"}
+    source.write_text(json.dumps([current, unrelated, example]), encoding="utf-8")
+
+    def provider(request):
+        payload = json.loads(request.content)
+        context = json.loads(payload["messages"][1]["content"])
+        assert payload["response_format"] == {"type": "json_object"}
+        if expected is None:
+            assert "routingExamples" not in context
+        else:
+            assert [item["id"] for item in context["routingExamples"]] == ["old"]
+            assert "Имя из другой записи" not in json.dumps(context, ensure_ascii=False)
+        reply = dict(NOTES, candidate=candidate, rationale="Совпадают сервис и симптом.")
+        return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(reply)}}]})
+
+    app = create_app(settings(source, llm_api_key="test-key"), provider_transport=httpx.MockTransport(provider))
+    with TestClient(app) as client:
+        sign_in(client)
+        response = client.post("/api/ai/summary", json={"incidentId": ROW["id"]})
+        assert response.status_code == 200
+        result = response.json()["assessment"]
+        assert result["check"] == NOTES["check"]
+        if expected is None:
+            assert result["routing"] is None
+        elif expected == "unknown":
+            assert result["routing"]["team"] is None and result["routing"]["exampleId"] is None
+        else:
+            assert result["routing"] == {"team": expected, "exampleId": "old", "reason": "Совпадают сервис и симптом."}
+        assert client.get("/api/incidents/" + ROW["id"]).json()["assignedGroupName"] == owner
 
 
 async def test_connected_clients_and_reconnect(source):
@@ -165,7 +210,7 @@ async def test_requested_summary_is_deduplicated_and_marks_changed_snapshot(sour
         calls.append(request)
         started.set()
         await finish.wait()
-        return httpx.Response(200, json={"choices": [{"message": {"content": "Анализ demo-001"}}]})
+        return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(NOTES)}}]})
 
     options = settings(source, llm_api_key="test-key", llm_requests_per_minute=2, llm_max_concurrent=1)
     app = create_app(options, provider_transport=httpx.MockTransport(provider))

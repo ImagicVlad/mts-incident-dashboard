@@ -34,6 +34,12 @@ summary { cursor: pointer; }
 .record-text p, .answer-text, .chat-message p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
 .record-text p { margin-top: 8px; }
 .answer-text a, .chat-message a { text-decoration: underline; text-underline-offset: .16em; }
+.summary-sections { display: grid; gap: 16px; margin: 14px 0; }
+.ai-note .summary-sections h3 { font-size: .89rem; line-height: 1.3; margin: 0; }
+.ai-note .summary-sections p:not(.eyebrow) { margin: 4px 0 0; }
+.summary-routing { border-inline-start: 3px solid #9a90c4; padding-inline-start: 12px; }
+.summary-routing strong { display: block; margin-top: 6px; }
+.summary-routing a { display: inline-block; margin-top: 6px; font-size: .86rem; color: #534583; text-decoration: underline; text-underline-offset: .16em; }
 .summary-action, .text-action { font: inherit; cursor: pointer; color: #534583; }
 .text-action { border: 0; background: transparent; text-decoration: underline; }
 .summary-action { border: 1px solid #cec9dd; border-radius: 8px; background: white; padding: 8px 10px; display: inline-flex; align-items: center; gap: 6px; font-size: .87rem; margin-top: 12px; }
