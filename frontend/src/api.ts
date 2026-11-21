@@ -19,6 +19,12 @@ export interface Snapshot {
 }
 export interface Account { login: string; displayName: string }
 export interface Answer { answer: string; epoch: string; snapshotVersion: number; asOf: string; stale?: boolean }
+export interface ChatAnswer extends Answer {
+  incidents?: string[];
+  relations?: {ids: string[]; reason: string}[];
+  total?: number | null;
+  metric?: 'sla' | 'status';
+}
 export interface SummaryAnswer extends Answer {
   assessment: {
     situation: string; impact: string; check: string;
@@ -57,6 +63,18 @@ export function displayFormats(zone='Europe/Moscow') {
 }
 export const active = (i: Incident) => i.stateEnum === 'Assigned' || i.stateEnum === 'WorkInProgress';
 export const finished = (i: Incident) => i.stateEnum === 'Resolved' || i.stateEnum === 'Closed';
+export function overviewStatus(item: Incident, onCoordinators: boolean) {
+  switch (item.stateEnum) {
+    case 'Assigned':
+      if (onCoordinators) return 'Назначен координаторам';
+      return item.assignedGroupName ? 'Назначен команде' : 'Назначен · команда не указана';
+    case 'WorkInProgress': return onCoordinators ? 'В работе у координаторов' : 'В работе';
+    case 'Research': return 'Разбор причин';
+    case 'Resolved':
+    case 'Closed': return 'Решён';
+    default: return item.state || item.stateEnum || 'Статус не указан';
+  }
+}
 export function remaining(deadline: string | null, now: number) {
   if (!deadline || !Number.isFinite(Date.parse(deadline))) return null;
   const delta = Date.parse(deadline) - now;

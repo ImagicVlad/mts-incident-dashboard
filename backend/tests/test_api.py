@@ -74,7 +74,8 @@ def test_summary_cache_chat_context_and_input_contract(source):
         body = json.loads(req.content)
         calls.append(body)
         assert req.headers["authorization"] == "Bearer test-key"
-        content = json.dumps(NOTES) if "response_format" in body else "demo-001 проверен"
+        context = json.loads(body["messages"][1]["content"])
+        content = json.dumps(NOTES if "incident" in context else {"view": "count", "scope": "critical"})
         return httpx.Response(200, json={"choices": [{"message": {"content": content}}]})
 
     app = create_app(settings(source, llm_api_key="test-key"), provider_transport=httpx.MockTransport(provider))
@@ -87,7 +88,10 @@ def test_summary_cache_chat_context_and_input_contract(source):
         assert client.post("/api/ai/summary", json=payload).json() == response.json()
         assert len(calls) == 1
         messages = [{"role": "user", "content": "Сколько критических инцидентов?"}]
-        assert client.post("/api/ai/chat", json={"messages": messages}).status_code == 200
+        chat = client.post("/api/ai/chat", json={"messages": messages})
+        assert chat.status_code == 200
+        assert chat.json()["answer"] == "Критические: 1."
+        assert chat.json()["total"] == 1 and chat.json()["incidents"] == []
         context = json.loads(calls[-1]["messages"][1]["content"])
         assert context["counts"]["critical"] == 1
         assert context["selection"][0]["id"] == "demo-001"
@@ -112,6 +116,22 @@ def test_provider_error_is_sanitized(source, upstream, expected):
         response = client.post("/api/ai/summary", json={"incidentId": "demo-001"})
         assert response.status_code == expected
         assert "sensitive" not in response.text and "test-key" not in response.text
+
+
+def test_chat_accepts_plain_provider_and_includes_requested_description(source):
+    source.write_text(json.dumps([{**ROW, "description": "Операция застревает при подтверждении."}]), encoding="utf-8")
+    def provider(req):
+        payload = json.loads(req.content)
+        context = json.loads(payload["messages"][1]["content"])
+        assert context["selection"][0]["description"] == "Операция застревает при подтверждении."
+        if "response_format" in payload:
+            return httpx.Response(400, json={"error": {"message": "Unsupported response_format"}})
+        return httpx.Response(200, json={"choices": [{"message": {"content": "Проверяется подтверждение.\n- demo-001"}}]})
+
+    with TestClient(create_app(settings(source, llm_api_key="test-key"), provider_transport=httpx.MockTransport(provider))) as client:
+        sign_in(client)
+        answer = client.post("/api/ai/chat", json={"messages": [{"role": "user", "content": "Подробнее про DEMO-001"}]}).json()
+        assert answer["answer"] == "Проверяется подтверждение." and answer["incidents"] == ["demo-001"]
 
 
 @pytest.mark.parametrize(("owner", "stage", "candidate", "expected"), [

@@ -1,31 +1,14 @@
-import { useRef, useState, useEffect, type ReactNode } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { ArrowUp, RotateCw, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { api, errorText, pathFor, type Answer, type SummaryAnswer, type Message, type Incident } from './api';
+import { api, errorText, pathFor, type ChatAnswer, type SummaryAnswer, type Message, type Incident } from './api';
 import { useLive } from './live';
+import { AnswerText, ChatResults } from './ChatReply';
+type ChatTurn = Message & {source?: ChatAnswer};
 
-function AnswerText({text}:{text:string}) {
-  const {snapshot} = useLive();
-  const ids = (snapshot?.incidents || []).map(i=>i.id).sort((a,b)=>b.length-a.length);
-  let tail = text;
-  const parts:ReactNode[] = [];
-  // Match only exact identifiers from the current snapshot. Never render model HTML.
-  while (tail && ids.length) {
-    let pos = -1, match = '';
-    for (const id of ids) {
-      if (!id) continue;
-      const at=tail.indexOf(id);
-      if (at>=0 && (pos<0 || at<pos)) {pos=at;match=id;}
-    }
-    if (pos<0) break;
-    parts.push(tail.slice(0,pos), <Link key={parts.length} to={pathFor(match)}>{match}</Link>);
-    tail=tail.slice(pos+match.length);
-  }
-  return <>{parts}{tail}</>;
-}
 export function Chat() {
   const {snapshot,aiConfigured:configured} = useLive();
-  const [messages,setMessages] = useState<(Message & {source?:Answer})[]>([]);
+  const [messages,setMessages] = useState<ChatTurn[]>([]);
   const [draft,setDraft] = useState('');
   const [error,setError] = useState('');
   const [pending,setPending] = useState(false);
@@ -47,12 +30,17 @@ export function Chat() {
   async function submit() {
     const text = draft.trim();
     if (!text || pending || configured===false) return;
-    const turn:Message = {role:'user',content:text};
+    const turn:ChatTurn = {role:'user',content:text};
     const previous=messages, next=[...messages,turn];
     const controller = new AbortController(); abort.current=controller;
     setMessages(next); setPending(true); setDraft(''); setError('');
     try {
-      const answer=await api<Answer>('ai/chat',{messages:next.slice(-7).map(({role,content})=>({role,content:content.slice(0,role==='user'?2000:4000)}))},controller.signal);
+      const turns = next.slice(-7).map(({role, content, source}) => {
+        const refs = [...(source?.incidents ?? []), ...(source?.relations ?? []).flatMap(group => group.ids)];
+        const historyText = refs.length ? content + '\nЗаписи в ответе: ' + refs.join(', ') : content;
+        return {role, content: historyText.slice(0, role === 'user' ? 2000 : 4000)};
+      });
+      const answer = await api<ChatAnswer>('ai/chat', {messages: turns}, controller.signal);
       setMessages([...next,{role:'assistant',content:answer.answer,source:answer}]);
     } catch (err) {
       if (!controller.signal.aborted) {setMessages(previous);setError(errorText(err));setDraft(text);}
@@ -63,7 +51,7 @@ export function Chat() {
       <div className="chat-message"><strong>Ассистент</strong><p>{configured===false?'ИИ не настроен. Для чата требуется подключение провайдера на сервере.':'Что проверить по смене? Могу подсказать сроки инцидентов и назначенные команды.'}</p></div>
       {!messages.length && configured!==false && <div className="chat-suggestions">{['У какого инцидента ближайший срок?','Какие инциденты на координаторах?'].map(s=><button key={s} onClick={()=>{setDraft(s);input.current?.focus();}}>{s}</button>)}</div>}
       {messages.map((m,k)=><div className={'chat-message '+(m.role==='user'?'from-user':'')} key={k}><strong>{m.role==='user'?'Вы':'Ассистент'}</strong><p><AnswerText text={m.content}/></p>
-        {m.source && <small>Снимок {m.source.snapshotVersion}{m.source.stale || m.source.epoch!==snapshot?.epoch || m.source.snapshotVersion!==snapshot?.snapshotVersion?' · данные обновились':''}</small>}</div>)}
+        {m.source && <><ChatResults reply={m.source}/><small>Снимок {m.source.snapshotVersion}{m.source.stale || m.source.epoch!==snapshot?.epoch || m.source.snapshotVersion!==snapshot?.snapshotVersion?' · данные обновились':''}</small></>}</div>)}
     </div>
     {pending && <p className="chat-status" role="status">Ассистент готовит ответ…</p>}
     {error && <p className="chat-error" role="alert">{error} <button className="text-action" onClick={submit}>Повторить</button></p>}

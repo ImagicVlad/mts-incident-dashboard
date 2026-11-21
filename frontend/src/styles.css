@@ -34,6 +34,17 @@ summary { cursor: pointer; }
 .record-text p, .answer-text, .chat-message p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
 .record-text p { margin-top: 8px; }
 .answer-text a, .chat-message a { text-decoration: underline; text-underline-offset: .16em; }
+.chat-incidents { list-style: none; margin: 8px 0 0; padding: 0; }
+.chat-incidents li + li, .chat-relation + .chat-relation { border-top: 1px solid #e5e2ec; }
+.chat-incidents a { display: grid; gap: 2px; padding-block: 6px; text-decoration: none; }
+.chat-incident-meta, .chat-incident-metric { color: var(--muted); font-size: .78rem; }
+.chat-incident-meta { font-family: var(--mono); }
+.chat-incident-title { font-size: .9rem; line-height: 1.35; font-weight: 600; }
+.chat-incidents a:hover .chat-incident-title, .chat-incidents a:focus-visible .chat-incident-title { color: #534583; text-decoration: underline; }
+.chat-message .chat-more { padding: 3px 0; font-size: .83rem; }
+.chat-relations h3 { margin-top: 10px; font-size: .9rem; }
+.chat-relation { display: grid; gap: 4px; padding-block: 6px; font-size: .85rem; }
+.chat-relation p { color: var(--muted); }
 .summary-sections { display: grid; gap: 16px; margin: 14px 0; }
 .record-panels { display: flex; flex-direction: column; gap: inherit; }
 .record-panels > .focus { flex: none; }

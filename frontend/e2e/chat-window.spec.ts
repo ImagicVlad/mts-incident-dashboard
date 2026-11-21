@@ -16,6 +16,55 @@ function bounds(locator: Locator) {
   });
 }
 
+test('список ответа раскрывается на месте, ссылки и переписка работают во всех режимах', async ({page}) => {
+  await openDashboard(page);
+  const snapshot = await (await page.request.get('/api/incidents')).json();
+  const items: {id: string; header: string; productName: string}[] = snapshot.incidents;
+  const ids = items.map(row => row.id);
+  expect(ids.length).toBeGreaterThan(8);
+  let calls = 0;
+  await page.route('**/api/ai/chat', async route => {
+    calls++;
+    if (calls === 1) return route.fulfill({status: 503, json: {detail: 'Сервис ИИ недоступен.'}});
+    return route.fulfill({json: {answer: 'Записи смены.', incidents: [...ids, 'INC-DOES-NOT-EXIST'],
+      relations: [{ids: ids.slice(0, 2), reason: 'В записях совпадает сервис.'}], total: ids.length,
+      epoch: snapshot.epoch, snapshotVersion: snapshot.snapshotVersion, asOf: snapshot.serverTime}});
+  });
+  const chat = page.locator('.incident-chat');
+  const input = chat.getByRole('textbox');
+  await input.fill('Покажи все инциденты');
+  await input.press('Enter');
+  await expect(chat.getByRole('alert')).toContainText('Сервис ИИ недоступен.');
+  await expect(input).toHaveValue('Покажи все инциденты');
+  await chat.getByRole('button', {name: 'Повторить'}).click();
+  const links = chat.locator('.chat-incidents a');
+  await expect(links).toHaveCount(4);
+  await expect(links.first()).toContainText(items[0].header);
+  await expect(links.first()).toContainText(items[0].productName);
+  await expect(chat.getByRole('link', {name: /DOES-NOT-EXIST/})).toHaveCount(0);
+  await chat.getByRole('button', {name: 'Показать ещё (' + (ids.length - 4) + ')'}).click();
+  await expect(links).toHaveCount(8);
+  await chat.getByRole('button', {name: 'Открепить ИИ-чат'}).click();
+  await page.setViewportSize({width: 340, height: 700});
+  await expect(chat).toHaveAttribute('data-mode', 'floating');
+  expect(await chat.getByRole('log').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await chat.getByRole('button', {name: 'Развернуть чат'}).click();
+  await expect(chat).toHaveAttribute('data-mode', 'maximized');
+  await chat.getByRole('button', {name: 'Показать ещё (' + (ids.length - 8) + ')'}).click();
+  await expect(links).toHaveCount(ids.length);
+  await expect(chat.getByRole('button', {name: /Показать ещё/})).toHaveCount(0);
+  await chat.getByRole('button', {name: 'Восстановить размер'}).click();
+  await links.first().click();
+  await expect(page).toHaveURL(new RegExp('/incidents/' + items[0].id + '$'));
+  await expect(chat).toHaveAttribute('data-mode', 'floating');
+  const related = chat.locator('.chat-relation a').nth(1);
+  await expect(related).toContainText(items[1].header);
+  await related.click();
+  await expect(page.getByRole('heading', {name: items[1].header, exact: true})).toBeVisible();
+  await expect(links).toHaveCount(ids.length);
+  expect(calls).toBe(2);
+});
+
 async function drag(page: Page, handle: Locator, dx: number, dy: number) {
   const {x, y, width, height} = await bounds(handle);
   const left = x + Math.min(width / 2, 60), top = y + height / 2;
