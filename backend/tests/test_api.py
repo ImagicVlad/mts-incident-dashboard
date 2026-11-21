@@ -181,6 +181,49 @@ def test_chat_can_converse_without_incident_file(source):
         assert not unavailable["incidents"] and "недоступны" in unavailable["answer"]
 
 
+def test_initial_suggestions_read_live_data_without_a_provider_call(source):
+    records = [{**ROW, "assignedGroupName": COORDINATORS, "deadline": "2099-01-01T00:00:00Z"},
+               {**ROW, "id": "demo-002", "deadline":"2000-01-01T00:00:00Z"}]
+    source.write_text(json.dumps(records), encoding="utf-8")
+    def offline(_):
+        pytest.fail("A starter question contacted the external provider")
+    app = create_app(settings(source, llm_api_key="test-key"), provider_transport=httpx.MockTransport(offline))
+    with TestClient(app) as client:
+        sign_in(client)
+        def ask(text):
+            reply = client.post("/api/ai/chat", json={"messages":[{"role":"user", "content":text}]})
+            assert reply.status_code == 200
+            return reply.json()
+        nearest = "У какого инцидента ближайший срок?"
+        assert ask(nearest)["incidents"] == ["demo-001"]
+        assert ask("Какие инциденты на координаторах?")["references"] == ["demo-001"]
+        records[0]["deadline"] = None
+        source.write_text(json.dumps(records), encoding="utf-8")
+        client.portal.call(app.state.store.reload)
+        empty = ask(nearest)
+        assert empty["incidents"] == [] and empty["total"] == 0
+
+
+@pytest.mark.parametrize(("error", "calls", "status"), [(httpx.ConnectError, 2, 200), (httpx.ReadError, 1, 502)])
+def test_followup_uses_provider_and_only_retries_connection_setup(source, error, calls, status):
+    seen = []
+    def provider(req):
+        seen.append(req)
+        if len(seen) == 1:
+            raise error("transient transport failure", request=req)
+        return httpx.Response(200, json={"choices":[{"message":{"content":"Смотрю указанную очередь."}}]})
+    with TestClient(create_app(settings(source, llm_api_key="test-key"), provider_transport=httpx.MockTransport(provider))) as client:
+        sign_in(client)
+        result = client.post("/api/ai/chat", json={"messages":[
+            {"role":"user","content":"Покажи исследование."},
+            {"role":"assistant","content":"Вот результаты."},
+            {"role":"user","content":"У какого инцидента ближайший срок?"},
+        ]})
+        assert result.status_code == status and len(seen) == calls
+        if status == 200:
+            assert result.json()["answer"] == "Смотрю указанную очередь."
+
+
 @pytest.mark.parametrize(("owner", "stage", "candidate", "expected"), [
     (None, "Assigned", 1, "Расчёты"), ("?", "WorkInProgress", 1, "Расчёты"),
     (COORDINATORS, "Research", 1, "Расчёты"), (None, "Assigned", 20, "unknown"),

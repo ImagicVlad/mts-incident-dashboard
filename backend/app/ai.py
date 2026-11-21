@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import time
 from collections import OrderedDict, deque
 from datetime import datetime
@@ -11,7 +12,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from .config import Settings
-from .chat_reply import ANALYSIS_PROMPT, CHAT_PROMPT, OVERVIEW_PROMPT, ChatContent, Query, prose_answer, query_answer, read_plan
+from .chat_reply import ANALYSIS_PROMPT, CHAT_PROMPT, OVERVIEW_PROMPT, ChatContent, ChatPlan, Query, prose_answer, query_answer, read_plan
 from .domain import OPEN
 from .assessment import (
     SUMMARY_PROMPT, IncidentAssessment, ModelAssessment, assemble_assessment, routing_examples,
@@ -175,7 +176,12 @@ class AIService:
         async with self.slots:
             try:
                 async with asyncio.timeout(self.settings.llm_timeout_seconds):
-                    response = await self.client.post(url, json=payload, headers=headers)
+                    try:
+                        response = await self.client.post(url, json=payload, headers=headers)
+                    except (httpx.ConnectError, httpx.ConnectTimeout):
+                        # The request has not been sent while establishing the connection.
+                        await asyncio.sleep(0.25)
+                        response = await self.client.post(url, json=payload, headers=headers)
                     if planning and response.status_code in {400, 422} and any(
                         term in response.text.lower() for term in ("tool", "function calling", "strict")
                     ):
@@ -192,7 +198,8 @@ class AIService:
                         response = await self.client.post(url, json=payload, headers=headers)
             except (TimeoutError, httpx.TimeoutException):
                 raise HTTPException(504, "Сервис ИИ не ответил вовремя.") from None
-            except httpx.RequestError:
+            except httpx.RequestError as exc:
+                logging.getLogger(__name__).warning("AI provider transport failed (%s)", type(exc).__name__)
                 raise HTTPException(502, "Сервис ИИ недоступен.") from None
         if response.status_code in {401, 403}:
             raise HTTPException(502, "Провайдер ИИ отклонил ключ или доступ к модели.")
@@ -219,23 +226,33 @@ class AIService:
         return AIAnswer(answer=answer.strip()[:12000], snapshotVersion=snap["snapshotVersion"],
                         epoch=snap["epoch"], asOf=snap["serverTime"], incidentId=incident_id)
 
-    async def chat(self, body: ChatInput):
-        if not self.settings.ai_configured:
-            raise HTTPException(503, "ИИ не настроен.")
-        snap = self.store.snapshot()
-        history = [message.model_dump() for message in body.messages]
-        context = chat_context(snap, body.previous)
+    async def _chat_plan(self, snap: dict, history: list[dict], previous: TurnReference | None) -> ChatPlan:
+        # The two starter buttons specify a complete query only at the start of a conversation.
+        if len(history) == 1 and previous is None:
+            question = history[0]["content"]
+            if question == "У какого инцидента ближайший срок?":
+                return ChatPlan(query=Query(operation="nearest"))
+            if question == "Какие инциденты на координаторах?":
+                return ChatPlan(text="Сейчас на координаторах:", query=Query(scope="assigned", display="list"))
+        context = chat_context(snap, previous)
         decision = await self.request(snap, context, history)
         try:
-            plan = read_plan(decision.answer)
+            return read_plan(decision.answer)
         except ValidationError as err:
             fields = ", ".join(".".join(map(str, item["loc"])) for item in err.errors())
             correction = {"role": "user", "content": f"Сервер отклонил параметры ({fields}). Исправь вызов для исходного вопроса."}
             decision = await self.request(snap, context, [*history, correction])
             try:
-                plan = read_plan(decision.answer)
+                return read_plan(decision.answer)
             except ValidationError:
                 raise HTTPException(502, "Не удалось уточнить выборку. Переформулируйте вопрос.") from None
+
+    async def chat(self, body: ChatInput):
+        if not self.settings.ai_configured:
+            raise HTTPException(503, "ИИ не настроен.")
+        snap = self.store.snapshot()
+        history = [message.model_dump() for message in body.messages]
+        plan = await self._chat_plan(snap, history, body.previous)
         query = plan.query
         previous = body.previous.ids if body.previous else []
         latest = self.store.snapshot()
