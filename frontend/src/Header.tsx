@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Bell, Check, CircleAlert, Radio, Search, X } from 'lucide-react';
+import { Bell, CircleAlert, Radio, Search, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { api, errorText, pathFor, type Account } from './api';
 import { useLive } from './live';
@@ -42,10 +42,11 @@ export function Header({user}: {user:Account}) {
 }
 export function LiveStatus() {
   const {snapshot,link,bootstrapError} = useLive();
+  const sourceError = snapshot?.sourceStatus === 'error' || bootstrapError;
+  if (!sourceError && link !== 'reconnecting') return null;
   return <div className="container system-status" aria-live="polite">
-    <span className={link==='online' ? 'connection online' : 'connection'}><Radio size={14}/>{link==='online'?'На связи':link==='connecting'?'Подключение…':'Восстанавливаем связь…'}</span>
-    {snapshot?.sourceStatus==='ok' && <span className="source-ok"><Check size={14}/> {snapshot.demoMode ? 'Демонстрационные данные' : snapshot.incidents.some(i => i.dataOrigin === 'defense-scenario') ? 'Смена для защиты' : 'Файл загружен'}</span>}
-    {(snapshot?.sourceStatus==='error' || bootstrapError) && <span className="source-error"><CircleAlert size={15}/>{snapshot?.hasSnapshot ? 'Показан последний корректный снимок.' : 'Данные недоступны.'} {snapshot?.sourceError || 'Ожидаем источник.'}</span>}
+    {link === 'reconnecting' && <span className="connection"><Radio size={14}/>Восстанавливаем связь…</span>}
+    {sourceError && <span className="source-error"><CircleAlert size={15}/>{snapshot?.hasSnapshot ? 'Показан последний корректный снимок.' : 'Данные недоступны.'} {snapshot?.sourceError || 'Ожидаем источник.'}</span>}
   </div>;
 }
 export function Toasts() {

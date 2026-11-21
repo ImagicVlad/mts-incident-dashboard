@@ -14,9 +14,8 @@ nav a svg, .focus-bottom a svg, .button svg { vertical-align: middle; }
 .system-status { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 12px; padding-top: 12px; color: var(--muted); font-size: .76rem; }
 .system-status > span { display: inline-flex; align-items: center; gap: 5px; }
 .system-status svg { flex: none; }
-.online svg, .source-ok svg { color: #267454; }
 .source-error, .form-error { color: #a6192b; }
-.connection:not(.online) svg { color: #ac4a00; }
+.connection svg { color: #ac4a00; }
 .system-status + .container .page-intro { padding-top: 12px; }
 .nav-popover { position: static; inset: auto; --attention: #ac4a00; z-index: 60; max-height: min(460px,var(--radix-popover-content-available-height)); }
 .logout { border: 0; width: 100%; cursor: pointer; }

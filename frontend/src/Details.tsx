@@ -20,6 +20,8 @@ export function Details() {
     ...(item.dataOrigin === 'defense-scenario' ? [['Источник', 'Сценарий защиты']] : []),
     ['Продукт',item.productName],['Сервис',item.service],['Приоритет',item.priority],
     ['Команда назначения',item.assignedGroupName],['Исполнитель',item.assignedEmployee],
+    ...(snapshot?.groups.assigned.includes(item.id) ? [['Следующий шаг', research
+      ? 'Передать разбор причин профильной команде' : 'Передать инцидент профильной команде']] : []),
     ['Время возникновения',stamp(item.submitDate)], ['Плановый срок устранения',stamp(item.deadline)],
     ...(item.completionDate?[['Завершение по данным источника',stamp(item.completionDate)]]:[]),
   ];

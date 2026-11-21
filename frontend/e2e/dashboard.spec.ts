@@ -95,12 +95,12 @@ test('инцидент меняет очередь при достижении �
     await expect(highCard).toContainText(issue.header);
     await expect(highCard).toHaveAttribute('data-priority','high');
     await expect(criticalCard).toHaveCount(0);
-    await expect(highCount).toHaveText('03');
-    await expect(criticalCard).toContainText('Высокий приоритет · срок близко', {timeout:15_000});
+    await expect(highCount).toHaveText('3');
+    await expect(criticalCard).toBeVisible({timeout:15_000});
     await expect(criticalCard).toHaveAttribute('data-priority','critical');
     await expect(highCard).toHaveCount(0);
-    await expect(highCount).toHaveText('02');
-    await expect(criticalCount).toHaveText('02');
+    await expect(highCount).toHaveText('2');
+    await expect(criticalCount).toHaveText('2');
 
     await page.getByRole('button', {name:/Оповещения/}).click();
     await expect(page.locator('.notifications-panel .result-link').filter({hasText:issue.id})).toHaveCount(1);
@@ -109,8 +109,8 @@ test('инцидент меняет очередь при достижении �
     await replace(JSON.stringify(data));
     await expect(highCard).toHaveAttribute('data-priority','high');
     await expect(criticalCard).toHaveCount(0);
-    await expect(highCount).toHaveText('03');
-    await expect(criticalCount).toHaveText('01');
+    await expect(highCount).toHaveText('3');
+    await expect(criticalCount).toHaveText('1');
   } finally { await replace(initial); }
 });
 
@@ -138,7 +138,11 @@ test('команда координаторов и стадия исследов
     issue.assignedGroupName = 'КЦ ИТ Координаторы Массовых Инцидентов';
     await publish();
     await expect(assigned.locator('.pill')).toHaveText('Назначен координаторам');
-    await expect(assigned).toContainText('Передать инцидент профильной команде');
+    const detail = await page.context().newPage();
+    await detail.goto('/incidents/' + issue.id);
+    const handoff = detail.locator('.facts dt').filter({hasText:'Следующий шаг'}).locator('+ dd');
+    await expect(handoff).toHaveText('Передать инцидент профильной команде');
+    await expect(assigned).not.toContainText('Передать инцидент');
 
     Object.assign(issue, {stateEnum:'WorkInProgress', stateId:2, state:'Выполняется'});
     await publish();
@@ -151,13 +155,15 @@ test('команда координаторов и стадия исследов
       await expect(card.locator('.pill')).toHaveText('Разбор причин');
       await expect(card).not.toContainText(/Осталось|Просрочен/);
     }
-    await expect(assigned).toContainText(reviewAction);
+    await expect(handoff).toHaveText(reviewAction);
+    await expect(assigned).not.toContainText(reviewAction);
     await expect(critical).toHaveCount(0);
     await expect(history).toHaveCount(0);
 
     issue.assignedGroupName = 'Платёжные сервисы';
     await publish();
     await expect(research).toContainText(issue.assignedGroupName);
+    await expect(handoff).toHaveCount(0);
     await expect(research).not.toContainText(reviewAction);
     await expect(assigned).toHaveCount(0);
 

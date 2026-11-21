@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDown, ChevronRight, Forward } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { active, finished, pathFor, remaining, type GroupId, type Incident } from './api';
 import { useLive } from './live';
@@ -39,11 +39,6 @@ function Card({item,group,now,animate,priority,onCoordinators}:{item:Incident;gr
     <Link data-incident-id={item.id} data-priority={priority} to={pathFor(item.id)} className={group==='history'?'incident resolved':'incident'}>
       <div className="card-top"><span className="mono">{item.id}</span><span className="product">{item.productName || 'Продукт не указан'}</span><Pill item={item} label={overviewStatus(item,onCoordinators)}/></div>
       <h3>{item.header || 'Без заголовка'}</h3>
-      {group === 'critical' && <p className="critical-reason">{item.priorityId === 4
-        ? 'Наивысший приоритет'
-        : 'Высокий приоритет · ' + (countdown?.overdue ? 'срок истёк' : 'срок близко')}</p>}
-      {onCoordinators && <p className="handoff-note"><Forward size={15} aria-hidden="true"/>
-        {research ? 'Передать разбор причин профильной команде' : 'Передать инцидент профильной команде'}</p>}
       <div className="card-foot"><span>Начало <b>{stamp(item.submitDate)}</b></span><span>Текущая команда <b className={item.assignedGroupName?'':'team-pending'} title={item.assignedGroupName || 'Команда не указана'}>{item.assignedGroupName || '?'}</b></span><span>Исполнитель <b>{item.assignedEmployee || 'Не указан'}</b></span>
         {group === 'assigned' && item.lastAssignmentToTeamDateTime && <span>У координаторов с <b>{stamp(item.lastAssignmentToTeamDateTime)}</b></span>}
         {(!research || item.deadline) && <span>Срок устранения <b>{stamp(item.deadline)}</b></span>}
@@ -54,7 +49,7 @@ function Card({item,group,now,animate,priority,onCoordinators}:{item:Incident;gr
   </motion.div>;
 }
 export function Dashboard() {
-  const {snapshot,now,newCards,bootstrapError,formats:{dateFormat,stamp,zoneLabel}} = useLive();
+  const {snapshot,now,newCards,bootstrapError,formats:{stamp,zoneLabel}} = useLive();
   const [expanded,setExpanded] = useState<Partial<Record<GroupId,boolean>>>({});
   useEffect(()=>{document.title='Дашборд инцидентов · МТС';},[]);
   if (!snapshot?.hasSnapshot) return <main className="container waiting"><h1>Дашборд инцидентов</h1><p role="status">{bootstrapError || snapshot?.sourceStatus==='error' ? 'Данные недоступны' : 'Загружаем инциденты…'}</p></main>;
@@ -81,11 +76,10 @@ export function Dashboard() {
     </section>;
   };
   return <main className="container overview">
-    <div className="page-intro"><h1>Дашборд инцидентов</h1><div className="date-stamp">{dateFormat.format(now)}
-      <span>Данные на {stamp(snapshot.dataUpdatedAt)} {zoneLabel}</span></div></div>
+    <div className="page-intro"><h1>Дашборд инцидентов</h1></div>
     <nav className="metrics" aria-label="Группы инцидентов">{sections.map(g=><a className={'metric '+g.tone} key={g.id} href={'#'+g.id} onClick={()=>setExpanded(p=>({...p,[g.id]:true}))}>
-      <span className="metric-name"><svg width="20" height="20" aria-hidden="true" focusable="false"><use href={'/queue-icons.svg#'+g.icon}/></svg>{g.name}</span>
-      <strong>{String(snapshot.counts[g.id]).padStart(2,'0')}</strong><small>{g.note}</small></a>)}</nav>
+      <span className="metric-heading"><span className="metric-name"><svg width="20" height="20" aria-hidden="true" focusable="false"><use href={'/queue-icons.svg#'+g.icon}/></svg>{g.name}</span>
+        <strong>{snapshot.counts[g.id]}</strong></span><small>{g.note}</small></a>)}</nav>
     <div className="work-grid"><div className="queue">{sections.map(g=>renderGroup(g.id,g.name))}</div>
       <aside className="rail"><section className="focus"><div className="focus-pattern" aria-hidden="true"/><p className="eyebrow"><span className="signal red-dot"/>Ближайший срок</p>
         {nearest && nextClock ? <><strong className="big-clock">{nextClock.clock}</strong><p className="clock-note">{nextClock.overdue?'прошло со срока решения':'до срока решения'} · {stamp(nearest.deadline)} {zoneLabel}</p>

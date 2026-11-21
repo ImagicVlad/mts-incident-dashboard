@@ -239,20 +239,26 @@ def classify(items: dict[str, Incident], now: datetime | None = None) -> dict[st
     for item in items.values():
         for group in memberships(item, now):
             groups[group].append(item.id)
+
+    def priority(id_: str) -> int:
+        value = items[id_].priorityId
+        return value if value in PRIORITY_LABELS else 0
+
     for key in ("critical", "high"):
-        groups[key].sort(key=lambda id_: (items[id_].deadline is None, items[id_].deadline or "", id_))
+        groups[key].sort(key=lambda id_: (-priority(id_), items[id_].deadline is None, items[id_].deadline or "", id_))
 
     critical_ids = set(groups["critical"])
     groups["assigned"].sort(key=lambda id_: (
         id_ not in critical_ids,
+        -priority(id_),
         items[id_].lastAssignmentToTeamDateTime is None,
         items[id_].lastAssignmentToTeamDateTime or "",
         id_,
     ))
     for key in ("review", "history"):
-        # Keep equal (or missing) completion dates in incident ID order.
+        # Stable ties for incidents with the same priority and completion time.
         groups[key].sort()
-        groups[key].sort(key=lambda id_: items[id_].completionDate or "", reverse=True)
+        groups[key].sort(key=lambda id_: (priority(id_), items[id_].completionDate or ""), reverse=True)
     return groups
 
 
