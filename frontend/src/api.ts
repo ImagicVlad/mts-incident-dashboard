@@ -1,6 +1,7 @@
 export type GroupId = 'critical' | 'assigned' | 'high' | 'review' | 'history';
 export interface Incident {
   id: string; sysId: string | null; header: string | null; productName: string | null;
+  dataOrigin?: string | null;
   priorityId: number | null; priority: string | null; stateEnum: string; state: string | null;
   description: string | null; shortDescription: string | null; assignedGroupName: string | null;
   assignedEmployee: string | null; deadline: string | null; submitDate: string | null;

@@ -44,7 +44,7 @@ export function LiveStatus() {
   const {snapshot,link,bootstrapError} = useLive();
   return <div className="container system-status" aria-live="polite">
     <span className={link==='online' ? 'connection online' : 'connection'}><Radio size={14}/>{link==='online'?'На связи':link==='connecting'?'Подключение…':'Восстанавливаем связь…'}</span>
-    {snapshot?.sourceStatus==='ok' && <span className="source-ok"><Check size={14}/> {snapshot.demoMode ? 'Демонстрационные данные' : 'Файл загружен'}</span>}
+    {snapshot?.sourceStatus==='ok' && <span className="source-ok"><Check size={14}/> {snapshot.demoMode ? 'Демонстрационные данные' : snapshot.incidents.some(i => i.dataOrigin === 'defense-scenario') ? 'Смена для защиты' : 'Файл загружен'}</span>}
     {(snapshot?.sourceStatus==='error' || bootstrapError) && <span className="source-error"><CircleAlert size={15}/>{snapshot?.hasSnapshot ? 'Показан последний корректный снимок.' : 'Данные недоступны.'} {snapshot?.sourceError || 'Ожидаем источник.'}</span>}
   </div>;
 }

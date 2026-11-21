@@ -17,6 +17,7 @@ export function Details() {
   const research = item.stateEnum==='Research';
   const countdown = active(item)?remaining(item.deadline,now):null;
   const rows = [
+    ...(item.dataOrigin === 'defense-scenario' ? [['Источник', 'Сценарий защиты']] : []),
     ['Продукт',item.productName],['Сервис',item.service],['Приоритет',item.priority],
     ['Команда назначения',item.assignedGroupName],['Исполнитель',item.assignedEmployee],
     ['Время возникновения',stamp(item.submitDate)], ['Плановый срок устранения',stamp(item.deadline)],
@@ -38,7 +39,7 @@ export function Details() {
         <p className="clock-note">{research || finished(item) ? (item.completionDate?'По данным источника · '+stamp(item.completionDate)+' '+zoneLabel:'Дата завершения не указана') : (countdown?.text || 'Срок не указан')}</p>
       </section>
       <Summary key={item.id} item={item}/>
-      {item.itsmUrl && /^https?:\/\//i.test(item.itsmUrl) ? <a className="button secondary" href={item.itsmUrl} target="_blank" rel="noopener noreferrer">Открыть в ITSM <ExternalLink size={16}/></a> : <p className="integration-note">Внешняя ITSM не подключена</p>}
+      {item.itsmUrl && /^https?:\/\//i.test(item.itsmUrl) ? <a className="button secondary" href={item.itsmUrl} target="_blank" rel="noopener noreferrer">Открыть в ITSM <ExternalLink size={16}/></a> : item.dataOrigin !== 'defense-scenario' && <p className="integration-note">Внешняя ITSM не подключена</p>}
     </aside></div></article><Link className="button secondary" to="/dashboard">Вернуться на дашборд</Link>
   </main>;
 }

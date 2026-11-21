@@ -1,0 +1,139 @@
+[
+  {
+    "afterSeconds": 20,
+    "new": {
+      "sysId": "960000000000900006",
+      "id": "INC-900006",
+      "state": "Назначен",
+      "stateEnum": "Assigned",
+      "stateId": 0,
+      "stateReason": "Нет",
+      "stateReasonId": "1",
+      "submitDate": "2026-01-05T09:00:20Z",
+      "deadline": "2026-01-05T09:40:20Z",
+      "completionDate": null,
+      "lastAssignmentToTeamDateTime": "2026-01-05T09:00:20Z",
+      "header": "После вебинара организатор не видит запись встречи",
+      "description": "У шести завершённых вебинаров запись дольше обычного остаётся в обработке. Исходные видеофайлы доступны в хранилище. Организаторы не могут отправить участникам ссылку на просмотр. Трансляции в прямом эфире продолжаются.",
+      "shortDescription": "Задержана публикация шести записей вебинаров.",
+      "assignedGroupName": "КЦ ИТ Координаторы Массовых Инцидентов",
+      "assignedEmployee": "Лев Лосев",
+      "assignedEmployeeLogin": "shift.llosev",
+      "initiatorName": "Мониторинг публикации записей",
+      "initiatorLogin": "shift.webinar.monitor",
+      "isEffect": false,
+      "isReason": false,
+      "isDouble": false,
+      "isMaster": false,
+      "incType": "МИ",
+      "serviceTypeId": 10,
+      "serviceType": "Клиентский",
+      "priorityId": 3,
+      "priority": "Высокий",
+      "urgencyId": 3,
+      "urgency": "Высокая",
+      "impactId": 2,
+      "impact": "Среднее",
+      "waitingExitDate": "0001-01-01T00:00:00",
+      "isRootIncident": false,
+      "productName": "МТС Линк",
+      "productId": "960000000001100099",
+      "productMasterId": "BI_SHIFT_099",
+      "productUrl": null,
+      "service": "Облачная запись вебинаров",
+      "serviceId": "960000000002200006",
+      "scenarioName": "Получение записи после завершения вебинара",
+      "isNeedUp": null,
+      "eliminationType": null,
+      "eliminationTypeId": null,
+      "receivingChannel": "Мониторинг сервиса",
+      "solution": null,
+      "dataOrigin": "defense-scenario"
+    }
+  },
+  {
+    "afterSeconds": 70,
+    "id": "INC-900002",
+    "changes": {
+      "stateEnum": "WorkInProgress",
+      "stateId": 2,
+      "state": "Выполняется",
+      "assignedGroupName": "Эксплуатация пакетного ядра",
+      "assignedEmployee": "Ян Погодин",
+      "assignedEmployeeLogin": "shift.ypogodin",
+      "lastAssignmentToTeamDateTime": "2026-01-05T09:01:10Z"
+    }
+  },
+  {
+    "afterSeconds": 115,
+    "id": "INC-900003",
+    "changes": {
+      "assignedGroupName": "Межоператорская телефония",
+      "assignedEmployee": "Илья Горюн",
+      "assignedEmployeeLogin": "shift.igoryun",
+      "lastAssignmentToTeamDateTime": "2026-01-05T09:01:55Z"
+    }
+  },
+  {
+    "afterSeconds": 160,
+    "id": "INC-900001",
+    "changes": {
+      "stateEnum": "Research",
+      "stateId": 20,
+      "state": "Исследование ситуации",
+      "stateReasonId": "0",
+      "stateReason": null,
+      "completionDate": "2026-01-05T09:02:40Z",
+      "solution": "Обработка входящей очереди возобновлена. По реестру платёжных подтверждений проверили отложенные зачисления: каждому платежу соответствует одна проводка. На контрольном лицевом счёте баланс обновился. Команда расчётов выясняет причину остановки очереди."
+    }
+  },
+  {
+    "afterSeconds": 205,
+    "id": "INC-900006",
+    "changes": {
+      "stateEnum": "WorkInProgress",
+      "stateId": 2,
+      "state": "Выполняется",
+      "assignedGroupName": "Видеоплатформа конференций",
+      "assignedEmployee": "Олеся Жукова",
+      "assignedEmployeeLogin": "shift.ozhukova",
+      "lastAssignmentToTeamDateTime": "2026-01-05T09:03:25Z"
+    }
+  },
+  {
+    "afterSeconds": 260,
+    "id": "INC-900002",
+    "changes": {
+      "stateEnum": "Research",
+      "stateId": 20,
+      "state": "Исследование ситуации",
+      "stateReasonId": "0",
+      "stateReason": null,
+      "completionDate": "2026-01-05T09:04:20Z",
+      "solution": "Новые интернет-сессии переведены на резервный узел пакетного ядра. Контрольные терминалы в каждом из трёх районов получили адрес и открыли страницу через мобильную сеть. Эксплуатация сопоставляет журналы узлов за время отказа."
+    }
+  },
+  {
+    "afterSeconds": 315,
+    "id": "INC-900006",
+    "changes": {
+      "stateEnum": "Resolved",
+      "stateId": 7,
+      "state": "Завершен",
+      "stateReasonId": "430",
+      "stateReason": "Постоянное решение",
+      "completionDate": "2026-01-05T09:05:15Z",
+      "solution": "Исправлена привязка очереди публикации к обработчику. Шесть исходных файлов опубликованы в кабинетах организаторов. Контрольная запись нового вебинара доступна по ссылке для участника."
+    }
+  },
+  {
+    "afterSeconds": 365,
+    "id": "INC-900021",
+    "changes": {
+      "stateEnum": "Closed",
+      "stateId": 10,
+      "state": "Закрыт",
+      "solution": "После исправления проверка предыдущей регистрации исключает повторную отправку приветствия. За четыре часа наблюдения дубли в журнале доставки не появились. Координатор получил подтверждение роуминговой команды и закрыл обращение."
+    }
+  }
+]

@@ -37,6 +37,7 @@ class RawIncident(BaseModel):
     """Observed fields needed by the app. Additional source fields are tolerated."""
     model_config = ConfigDict(extra="ignore")
     id: Identifier
+    dataOrigin: str | None = None
     sysId: Identifier | None = None
     productId: Identifier | None = None
     productMasterId: Identifier | None = None
@@ -120,7 +121,7 @@ def normalize_date(value: str | None, field: str, diagnostics: list[str]) -> str
 
 
 def itsm_link(template: str, record: RawIncident) -> str | None:
-    if not template:
+    if not template or record.dataOrigin == "defense-scenario":
         return None
     try:
         values = {"id": record.id, "sysId": record.sysId}
