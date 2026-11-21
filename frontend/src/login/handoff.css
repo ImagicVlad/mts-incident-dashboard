@@ -1,0 +1,158 @@
+.handoff-poster {
+  --handoff-red: #ff193b;
+  --handoff-ink: #201d1b;
+  --handoff-paper: #fff7e7;
+  --handoff-gutter: clamp(26px, 3.65vw, 70px);
+  isolation: isolate;
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  padding: clamp(24px, 4.5vh, 58px) var(--handoff-gutter);
+  background: var(--handoff-red);
+  color: var(--handoff-ink);
+}
+.handoff-mast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: clamp(12px, 2.3vh, 24px);
+  border-bottom: 1px solid currentColor;
+  font-size: .85rem;
+  font-weight: 650;
+}
+.handoff-mast img { display: block; background: #ff0032; }
+.handoff-title {
+  margin: clamp(24px, 4.5vh, 64px) 0 0;
+  font-size: clamp(3.35rem, min(7vw, 11vh), 9rem);
+  font-weight: 700;
+  line-height: .9;
+  letter-spacing: -.075em;
+}
+.handoff-book {
+  position: relative;
+  width: 95%;
+  margin: clamp(24px, 4.4vh, 62px) auto clamp(16px, 2.8vh, 38px);
+  align-self: center;
+  transform: rotate(-4deg);
+}
+.handoff-book::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--handoff-ink);
+  transform: translate(2.7%, 3.4%) rotate(2.7deg);
+}
+.handoff-paper {
+  position: relative;
+  padding: clamp(18px, 2.5vw, 45px);
+  background: var(--handoff-paper);
+  clip-path: polygon(0 0, calc(100% - 22px) 0, 100% 22px, 100% 100%, 0 100%);
+}
+.handoff-caption, .handoff-roles dt {
+  font-family: var(--mono);
+  font-size: clamp(.68rem, .87vw, .92rem);
+  line-height: 1.3;
+}
+.handoff-caption { display: flex; justify-content: space-between; gap: 8px; }
+.handoff-subject {
+  margin-top: clamp(12px, 2.1vw, 32px);
+  font-size: clamp(1.75rem, 3.55vw, 4.4rem);
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: -.06em;
+}
+.handoff-journey {
+  position: relative;
+  height: clamp(55px, 9vh, 104px);
+  margin: clamp(12px, 3vh, 48px) 4px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.handoff-journey::before {
+  position: absolute;
+  inset: 50% 0 auto;
+  content: "";
+  border-top: 2px solid currentColor;
+}
+.handoff-start, .handoff-end {
+  position: relative;
+  z-index: 1;
+  width: 9px;
+  height: 9px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  background: var(--handoff-paper);
+}
+.handoff-end { border-radius: 0; background: currentColor; }
+.handoff-travel {
+  --ticket-width: clamp(44px, 6.6vw, 112px);
+  position: absolute;
+  inset: 50% calc(var(--ticket-width) + 14px) auto 14px;
+  transform: translateX(100%);
+  z-index: 2;
+}
+.handoff-ticket {
+  display: grid;
+  place-items: center;
+  position: absolute;
+  width: var(--ticket-width);
+  aspect-ratio: 1.76;
+  transform: translateY(-50%);
+  background: var(--handoff-red);
+  color: var(--handoff-ink);
+  clip-path: polygon(0 0, 84% 0, 100% 27%, 100% 100%, 0 100%);
+  font: 650 clamp(25px, 3.7vw, 68px)/1 Arial, sans-serif;
+}
+.handoff-roles { display: flex; justify-content: space-between; gap: 12px; margin: 0; }
+.handoff-roles div:last-child { text-align: right; }
+.handoff-roles dt { color: #63594e; }
+.handoff-roles dd { margin: 4px 0 0; font-size: clamp(.85rem, 1.35vw, 1.6rem); font-weight: 650; }
+
+/* One slip leaves the coordinator, arrives with billing and rests there.
+   Reduced motion keeps the slip at its destination. */
+@media (prefers-reduced-motion: no-preference) {
+  .handoff-travel { animation: handoff-travel 7s cubic-bezier(.56,.03,.19,1) -1.8s infinite; }
+  @keyframes handoff-travel {
+    0% { opacity: 0; transform: translateX(0); }
+    9%, 26% { opacity: 1; transform: translateX(0); }
+    58%, 86% { opacity: 1; transform: translateX(100%); }
+    96%, 100% { opacity: 0; transform: translateX(100%); }
+  }
+}
+@media (max-width: 760px) {
+  .handoff-poster {
+    grid-template: "brand title" auto "transfer transfer" auto / minmax(100px,1fr) minmax(0,1.4fr);
+    gap: 12px;
+    padding: 16px clamp(16px, 4.5vw, 32px) 19px;
+  }
+  .handoff-mast { grid-area: brand; align-self: start; padding: 0; border: 0; gap: 6px; font-size: .68rem; line-height: 1.15; }
+  .handoff-mast img { width: 24px; height: 24px; }
+  .handoff-title { grid-area: title; margin: 0; font-size: clamp(1.72rem, 6.1vw, 3rem); justify-self: end; }
+  .handoff-book { grid-area: transfer; width: 97%; margin: 0 auto; transform: rotate(-1.5deg); }
+  .handoff-book::before { transform: translate(1.5%, 2.5%) rotate(1deg); }
+  .handoff-paper { padding: 10px 14px 12px; }
+  .handoff-caption, .handoff-roles dt { font-size: .625rem; }
+  .handoff-subject { margin-top: 4px; font-size: 1.2rem; }
+  .handoff-journey { height: 22px; margin: 3px 3px 0; }
+  .handoff-travel { --ticket-width: 32px; }
+  .handoff-ticket { font-size: 19px; }
+  .handoff-roles dd { margin-top: 1px; font-size: .75rem; }
+}
+@media (min-width: 761px) and (max-height: 560px) {
+  .handoff-poster { padding-block: 13px; }
+  .handoff-mast { padding-bottom: 8px; }
+  .handoff-mast img { height: 25px; width: 25px; }
+  .handoff-title { margin-top: 14px; font-size: clamp(2.5rem, 9vh, 4rem); }
+  .handoff-book { width: 87%; margin-block: 14px; }
+  .handoff-paper { padding: 16px 20px; }
+  .handoff-subject { margin-top: 12px; font-size: 1.75rem; }
+  .handoff-journey { height: 42px; margin-top: 10px; }
+}
+@media (max-width: 760px) and (max-height: 640px) {
+  .handoff-poster { padding: 8px 14px; gap: 5px; }
+  .handoff-title { font-size: 1.5rem; }
+  .handoff-paper { padding-block: 6px 8px; }
+}

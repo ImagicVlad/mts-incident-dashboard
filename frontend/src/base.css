@@ -111,65 +111,6 @@ h3 { font-size: 1.16rem; letter-spacing: -.025em; font-weight: 650; }
   min-height: 100dvh;
   background: white;
 }
-.auth-art {
-  --paper: #efece4;
-  --poster-gutter: clamp(24px, 3.25vw, 76px);
-  display: grid;
-  grid-template-rows: auto auto minmax(12rem, 1fr);
-  min-width: 0;
-  background: var(--paper);
-  color: #1d1c19;
-}
-.poster-imprint {
-  margin: clamp(20px, 3.8vh, 44px) var(--poster-gutter) 0;
-  display: flex; align-items: center; gap: 12px;
-  font-size: .79rem; font-weight: 650;
-}
-.poster-imprint img { display: block; }
-.poster-hours { margin-left: auto; font: .78rem var(--mono); font-variant-numeric: tabular-nums; }
-.poster-title {
-  margin: clamp(26px, 5.6vh, 68px) var(--poster-gutter) clamp(22px, 4vh, 48px);
-  font-size: clamp(3rem, 5.45vw, 7.2rem);
-  line-height: .95; font-weight: 690; letter-spacing: -.066em;
-}
-.poster-title span {
-  display: block; width: fit-content; margin-bottom: .025em;
-  font: italic 400 1.14em/.91 Georgia, "Times New Roman", serif;
-  letter-spacing: -.075em;
-}
-.poster-figure { margin: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
-.poster-frame {
-  position: relative; overflow: hidden; isolation: isolate;
-  background: #cbc7c0;
-}
-.poster-frame img, .poster-ink {
-  position: absolute; inset: 0; width: 100%; height: 100%;
-  object-fit: cover; object-position: 55% 47%;
-}
-.poster-frame img { display: block; filter: contrast(1.1); mix-blend-mode: multiply; }
-.poster-ink {
-  /* A second, slightly misregistered impression of the same photograph. */
-  background: #ff2444 url('/shukhov-1940.webp') 55% 47% / cover no-repeat;
-  background-blend-mode: multiply;
-  transform: scale(1.065);
-  transform-origin: 80% 46%;
-  clip-path: polygon(46% 0, 81% 0, 53% 100%, 18% 100%);
-}
-.poster-caption {
-  display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap;
-  gap: 4px 12px; padding: 14px var(--poster-gutter) 16px;
-  font-size: .8rem; font-weight: 600;
-}
-.poster-caption small { font-size: .69rem; font-weight: 400; color: #58564f; }
-.poster-caption a { text-decoration: underline; text-underline-offset: 2px; }
-@media (prefers-reduced-motion: no-preference) {
-  .poster-ink { animation: print-pass 12s cubic-bezier(.52,.04,.27,1) -2s infinite; }
-  @keyframes print-pass {
-    0%, 100% { clip-path: polygon(32% 0, 56% 0, 28% 100%, 4% 100%); }
-    30%, 40% { clip-path: polygon(68% 0, 108% 0, 80% 100%, 40% 100%); }
-    66% { clip-path: polygon(53% 0, 66% 0, 38% 100%, 25% 100%); }
-  }
-}
 .auth-panel { display: grid; place-items: center; padding: 40px clamp(24px, 5vw, 88px); }.auth-box { width: min(100%, 440px); }.auth-box .eyebrow { color: var(--muted); }
 .auth-box h1 { font-size: clamp(2.25rem,3.7vw,3.5rem); }.intro-note { color: var(--muted); margin: 12px 0 32px; line-height: 1.5; }
 .auth-box form { display: grid; gap: 18px; }.auth-box label { display: grid; gap: 7px; font-weight: 560; font-size: .91rem; }
@@ -187,18 +128,6 @@ h3 { font-size: 1.16rem; letter-spacing: -.025em; font-weight: 650; }
   .work-grid,.record-grid,.show-grid { grid-template-columns: 1fr; }.metrics { grid-template-columns: 1fr 1fr; }
   .page-intro { flex-wrap: wrap; align-items: start; padding: 25px 0 17px; }.date-stamp { text-align: left; font-size: .88rem; }
   .auth-layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
-  .auth-art {
-    grid-template: "imprint photo" auto "title photo" 1fr "caption caption" auto / minmax(0, 1.55fr) minmax(0, 1fr);
-    --poster-gutter: clamp(14px, 4vw, 28px);
-  }
-  .poster-imprint { grid-area: imprint; gap: 8px; margin: 16px var(--poster-gutter) 0; font-size: .69rem; }
-  .poster-imprint img { width: 25px; height: 25px; }
-  .poster-hours { display: none; }
-  .poster-title { grid-area: title; align-self: end; margin: 24px var(--poster-gutter) 18px; font-size: clamp(1.65rem, 6.4vw, 3.05rem); }
-  .poster-figure { display: contents; }
-  .poster-frame { grid-area: photo; }
-  .poster-caption { grid-area: caption; padding: 9px var(--poster-gutter); font-size: .68rem; }
-  .poster-caption small { font-size: .62rem; }
   .auth-panel { padding: clamp(24px, 6vw, 40px); }.show-grid { gap: 14px; }
   .work-grid { grid-template-areas: "side" "queue"; }.rail { grid-area: side; grid-template-columns: repeat(2,minmax(0,1fr)); }.rail .ai-note { grid-column: 1/-1; }.queue { grid-area: queue; }
 }
@@ -215,9 +144,5 @@ h3 { font-size: 1.16rem; letter-spacing: -.025em; font-weight: 650; }
 }
 @media (min-width: 761px) and (max-height: 520px) {
   .auth-panel { padding-block: 12px; }
-  .auth-art { grid-template-rows: auto auto minmax(5rem,1fr); }
-  .poster-imprint { margin-top: 12px; }
-  .poster-title { margin-block: 10px 12px; font-size: 2.5rem; }
-  .poster-caption { padding-block: 8px; }
   .auth-box h1 { font-size: 2rem; }
 }
