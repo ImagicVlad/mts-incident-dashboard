@@ -67,7 +67,8 @@ export function Dashboard() {
     const shown = expanded[id]?ids:ids.slice(0,2);
     return <section className={'group '+(id==='history'?'history':'')} key={id} id={id} data-testid={'group-'+id} aria-labelledby={'heading-'+id}>
       <h2 id={'heading-'+id} className="section-head"><button className="category-toggle" type="button" aria-expanded={!!expanded[id]} aria-controls={'list-'+id} onClick={()=>setExpanded(prev=>({...prev,[id]:!prev[id]}))}>
-        <span className="category-name">{name}</span><span className="count">{ids.length}</span><ChevronDown size={16}/></button></h2>
+        <span className="category-caption"><span className="category-name">{name}</span><span className="count">{ids.length}</span></span>
+        <ChevronDown size={16}/></button></h2>
       <div id={'list-'+id} className="incident-list">{shown.map(key=>{
         const item=byId.get(key);
         return item && <Card key={key} item={item} group={id} priority={priorityById.get(key)} onCoordinators={onCoordinators.has(key)} now={now} animate={newCards.has(id+'/'+key)}/>;
@@ -78,8 +79,9 @@ export function Dashboard() {
   return <main className="container overview">
     <div className="page-intro"><h1>Дашборд инцидентов</h1></div>
     <nav className="metrics" aria-label="Группы инцидентов">{sections.map(g=><a className={'metric '+g.tone} key={g.id} href={'#'+g.id} onClick={()=>setExpanded(p=>({...p,[g.id]:true}))}>
-      <span className="metric-heading"><span className="metric-name"><svg width="20" height="20" aria-hidden="true" focusable="false"><use href={'/queue-icons.svg#'+g.icon}/></svg>{g.name}</span>
-        <strong>{snapshot.counts[g.id]}</strong></span><small>{g.note}</small></a>)}</nav>
+      <span className="metric-heading"><svg width="20" height="20" aria-hidden="true" focusable="false"><use href={'/queue-icons.svg#'+g.icon}/></svg>
+        <span className="category-caption"><strong className="metric-name">{g.name}</strong><span className="count">{snapshot.counts[g.id]}</span></span>
+      </span><small>{g.note}</small></a>)}</nav>
     <div className="work-grid"><div className="queue">{sections.map(g=>renderGroup(g.id,g.name))}</div>
       <aside className="rail"><section className="focus"><div className="focus-pattern" aria-hidden="true"/><p className="eyebrow"><span className="signal red-dot"/>Ближайший срок</p>
         {nearest && nextClock ? <><strong className="big-clock">{nextClock.clock}</strong><p className="clock-note">{nextClock.overdue?'прошло со срока решения':'до срока решения'} · {stamp(nearest.deadline)} {zoneLabel}</p>

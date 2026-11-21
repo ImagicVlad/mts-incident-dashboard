@@ -83,8 +83,8 @@ test('инцидент меняет очередь при достижении �
     const selector = `[data-incident-id="${issue.id}"]`;
     const highCard = high.locator(selector);
     const criticalCard = critical.locator(selector);
-    const highCount = page.locator('.metric[href="#high"] strong');
-    const criticalCount = page.locator('.metric[href="#critical"] strong');
+    const highCount = page.locator('.metric[href="#high"] .count');
+    const criticalCount = page.locator('.metric[href="#critical"] .count');
 
     // The final quarter of this 160-second interval starts six seconds from now.
     const now = Date.now();
