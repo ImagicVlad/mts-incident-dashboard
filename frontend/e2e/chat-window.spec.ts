@@ -116,7 +116,7 @@ test('ответ приходит при свёрнутом чате, истор
   expect(requests).toBe(1);
 });
 
-test('карточка автоматически открывает встроенный чат, а ручной режим сохраняется при навигации', async ({page}) => {
+test('встроенный чат скрыт в карточке, а при возврате сохраняет переписку и черновик', async ({page}) => {
   await openDashboard(page);
   const card = page.getByTestId('group-critical').locator('a').first();
   const chat = page.locator('.incident-chat');
@@ -135,43 +135,49 @@ test('карточка автоматически открывает встро�
   await log.evaluate(el => {el.scrollTop = 48;});
   await chat.evaluate(el => el.setAttribute('data-session-test', 'same-chat'));
   await card.click();
-  await mode('floating');
-  await expect(input).toHaveValue('Уточнить время восстановления');
-  expect(await log.evaluate(el => el.scrollTop)).toBe(48);
   await expect(page.getByRole('heading', {name: 'Данные инцидента'})).toBeVisible();
+  await expect(chat).toBeHidden();
+  await expect(page.getByRole('button', {name: 'Открыть ИИ-чат'})).toHaveCount(0);
   await expect(page.locator('.compact-focus .big-clock')).toBeVisible();
   await back.click();
   await mode('docked');
+  await expect(input).toHaveValue('Уточнить время восстановления');
+  await expect(log).toContainText('Сводка по смене.');
   expect(await log.evaluate(el => el.scrollTop)).toBe(48);
   await page.goBack();
-  await mode('floating');
-  await chat.getByRole('button', {name: 'Закрыть окно чата'}).click();
   await expect(chat).toBeHidden();
-  const launcher = page.getByRole('button', {name: 'Открыть ИИ-чат'});
-  await expect(launcher).toBeVisible();
   await page.goForward();
-  await mode('docked');
-  await page.goBack();
-  await launcher.click();
-  await expect(input).toHaveValue('Уточнить время восстановления');
-  await chat.getByRole('button', {name: 'Свернуть чат'}).click();
-  await page.goForward();
-  await mode('minimized');
-  await page.goBack();
-  await mode('minimized');
-  await chat.getByRole('button', {name: 'Восстановить чат'}).click();
-  await chat.getByRole('button', {name: 'Развернуть чат'}).click();
-  await page.goForward();
-  await mode('maximized');
-  await page.goBack();
-  await mode('maximized');
-  await chat.getByRole('button', {name: 'Восстановить размер'}).click();
-  await back.click();
-  await mode('floating');
-  await chat.getByRole('button', {name: 'Закрыть окно и вернуть чат на дашборд'}).click();
   await mode('docked');
   await expect(chat).toHaveAttribute('data-session-test', 'same-chat');
   await expect(chat).toHaveCount(1);
+});
+
+test('вручную свёрнутое окно сохраняет режим и положение при навигации', async ({page}) => {
+  await openDashboard(page);
+  const chat = page.locator('.incident-chat');
+  const mode = (name: string) => expect(chat).toHaveAttribute('data-mode', name);
+  await chat.getByRole('button', {name: 'Открепить ИИ-чат'}).click();
+  await chat.getByRole('button', {name: 'Свернуть чат'}).click();
+  await drag(page, chat.locator('header'), -90, -75);
+  const miniBounds = await bounds(chat);
+  await page.getByTestId('group-critical').locator('a').first().click();
+  await expect(page.getByRole('heading', {name: 'Данные инцидента'})).toBeVisible();
+  await mode('minimized');
+  expect(await bounds(chat)).toEqual(miniBounds);
+  await expect(chat.getByRole('textbox')).toBeHidden();
+  await page.goBack();
+  await mode('minimized');
+  await page.goForward();
+  await mode('minimized');
+  expect(await bounds(chat)).toEqual(miniBounds);
+  await chat.getByRole('button', {name: 'Восстановить чат'}).click();
+  await chat.getByRole('button', {name: 'Развернуть чат'}).click();
+  await page.goBack();
+  await mode('maximized');
+  await page.goForward();
+  await mode('maximized');
+  await chat.getByRole('button', {name: 'Восстановить размер'}).click();
+  await mode('floating');
 });
 
 test('плавающий чат переносит запрос, ответ, прокрутку и геометрию между маршрутами', async ({page}) => {
@@ -194,6 +200,8 @@ test('плавающий чат переносит запрос, ответ, п�
   await drag(page, chat.getByRole('button', {name: 'Изменить размер окна'}), 50, 40);
   const windowBounds = await bounds(chat);
   await card.click();
+  await expect(page.getByRole('heading', {name: 'Данные инцидента'})).toBeVisible();
+  const firstIncident = page.url();
   expect(await bounds(chat)).toEqual(windowBounds);
   await page.evaluate(() => window.scrollBy(0, 600));
   expect(await bounds(chat)).toEqual(windowBounds);
@@ -214,5 +222,47 @@ test('плавающий чат переносит запрос, ответ, п�
   await expect(log.getByText('Проверь сроки по смене', {exact: true})).toHaveCount(1);
   await expect(log.getByText(answer, {exact: true})).toHaveCount(1);
   expect(await bounds(chat)).toEqual(windowBounds);
+  await page.goBack();
+  await page.getByTestId('group-high').locator('a').first().click();
+  await expect(page.getByRole('heading', {name: 'Данные инцидента'})).toBeVisible();
+  expect(page.url()).not.toBe(firstIncident);
+  expect(await bounds(chat)).toEqual(windowBounds);
+  await expect(input).toHaveValue('Следующий вопрос');
+  expect(requests).toBe(1);
+});
+
+test('закрытие в карточке скрывает окно до возврата на дашборд и сохраняет текущий запрос', async ({page}) => {
+  await openDashboard(page);
+  const chat = page.locator('.incident-chat');
+  const launcher = page.getByRole('button', {name: 'Открыть ИИ-чат'});
+  let release!: () => void;
+  const hold = new Promise<void>(resolve => { release = resolve; });
+  const answer = 'Срок инцидента уточнён.';
+  let requests = 0;
+  await page.route('**/api/ai/chat', async route => {
+    requests++;
+    await hold;
+    await route.fulfill({json: {answer, epoch: 'test', snapshotVersion: 1, asOf: new Date().toISOString()}});
+  });
+  await chat.getByRole('button', {name: 'Открепить ИИ-чат'}).click();
+  await page.getByTestId('group-critical').locator('a').first().click();
+  await chat.getByRole('textbox').fill('Уточни срок');
+  await chat.getByRole('textbox').press('Enter');
+  await expect(chat.getByRole('status')).toBeVisible();
+  await chat.getByRole('button', {name: 'Закрыть окно чата'}).click();
+  await expect(chat).toBeHidden();
+  await expect(launcher).toHaveCount(0);
+  const response = page.waitForResponse('**/api/ai/chat');
+  release();
+  await response;
+  await expect(chat).toBeHidden();
+  await page.goBack();
+  await expect(chat).toHaveAttribute('data-mode', 'docked');
+  await expect(chat.getByRole('log').getByText('Уточни срок', {exact: true})).toBeVisible();
+  await expect(chat.getByRole('log').getByText(answer, {exact: true})).toBeVisible();
+  await expect(chat.getByRole('button', {name: 'Открепить ИИ-чат'})).toBeVisible();
+  await page.goForward();
+  await expect(chat).toBeHidden();
+  await expect(launcher).toHaveCount(0);
   expect(requests).toBe(1);
 });

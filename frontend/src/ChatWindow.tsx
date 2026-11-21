@@ -6,6 +6,10 @@ type Size = { width: number; height: number };
 type Point = { left: number; top: number };
 type Rect = Point & Size;
 type Gesture = { kind: 'move' | 'resize'; id: number; x: number; y: number; start: Rect };
+type ChatWindowState =
+  | { mode: 'docked' | 'closed' }
+  | { mode: 'floating' | 'maximized'; normal: Rect }
+  | { mode: 'minimized'; normal: Rect; position: Point; restore: 'floating' | 'maximized' };
 
 function viewport(): Size {
   return {
@@ -43,37 +47,26 @@ export function ChatWindow({dock, children}: {dock: HTMLElement | null; children
   const panel = useRef<HTMLElement>(null);
   const historyOffset = useRef(0);
   const gesture = useRef<Gesture | null>(null);
-  const [normal, setNormal] = useState<Rect | null>(null);
-  const [maximized, setMaximized] = useState(false);
-  const [mini, setMini] = useState<Point | null>(null);
+  const [windowState, setWindowState] = useState<ChatWindowState>({mode: 'docked'});
   const [screen, setScreen] = useState(viewport);
-  const [dockedSize, setDockedSize] = useState<Size>({width: 400, height: 480});
-  const [closedAway, setClosedAway] = useState(false);
-  const hidden = !dock && closedAway;
-  const floating = !dock || (normal !== null && !closedAway);
-  const mode = !floating ? 'docked' : mini ? 'minimized' : maximized ? 'maximized' : 'floating';
-  const bounds = normal ? fit(normal, screen) : bottomRight(dockedSize, screen);
+  const floating = 'normal' in windowState;
+  const mode = floating ? windowState.mode : (dock ? 'docked' : 'closed');
+  const bounds = floating ? fit(windowState.normal, screen) : undefined;
   const miniWidth = Math.min(224, screen.width), miniHeight = Math.min(48, screen.height);
 
   const parent = floating ? document.body : dock;
   useLayoutEffect(() => {
-    if (!parent || parent === host.parentNode) return;
+    if (parent === host.parentNode) return;
+    if (!parent) {
+      host.remove();
+      return;
+    }
     const log = host.querySelector<HTMLElement>('[role="log"]');
     const offset = log?.clientHeight ? log.scrollTop : historyOffset.current;
     parent.appendChild(host);
     if (log) log.scrollTop = offset;
   }, [host, parent]);
   useLayoutEffect(() => () => host.remove(), [host]);
-
-  useLayoutEffect(() => {
-    if (floating || !panel.current) return;
-    const observer = new ResizeObserver(([entry]) => {
-      const {inlineSize: width, blockSize: height} = entry.borderBoxSize[0];
-      if (width && height) setDockedSize({width, height});
-    });
-    observer.observe(panel.current, {box: 'border-box'});
-    return () => observer.disconnect();
-  }, [floating]);
 
   useLayoutEffect(() => {
     if (!floating) return;
@@ -92,15 +85,11 @@ export function ChatWindow({dock, children}: {dock: HTMLElement | null; children
     const {width, height} = panel.current.getBoundingClientRect();
     const available = viewport();
     setScreen(available);
-    setClosedAway(false);
-    setNormal(bottomRight({width, height}, available));
+    setWindowState({mode: 'floating', normal: bottomRight({width, height}, available)});
   }
 
   function close() {
-    setNormal(dock ? null : bounds);
-    setClosedAway(!dock);
-    setMini(null);
-    setMaximized(false);
+    setWindowState({mode: dock ? 'docked' : 'closed'});
     gesture.current = null;
   }
 
@@ -114,9 +103,9 @@ export function ChatWindow({dock, children}: {dock: HTMLElement | null; children
   }
 
   function resize(start: Rect, dx: number, dy: number) {
-    setNormal({left: start.left, top: start.top,
+    setWindowState({mode: 'floating', normal: {left: start.left, top: start.top,
       width: clamp(start.width + dx, 340, screen.width - start.left),
-      height: clamp(start.height + dy, 400, screen.height - start.top)});
+      height: clamp(start.height + dy, 400, screen.height - start.top)}});
   }
 
   function move(event: PointerEvent<HTMLElement>) {
@@ -126,23 +115,20 @@ export function ChatWindow({dock, children}: {dock: HTMLElement | null; children
     const {left, top, width, height} = active.start;
     if (active.kind === 'resize') return resize(active.start, dx, dy);
     const position = {left: clamp(left + dx, 0, screen.width - width), top: clamp(top + dy, 0, screen.height - height)};
-    if (mini) setMini(position);
-    else setNormal({...position, width, height});
+    if (windowState.mode === 'minimized') setWindowState({...windowState, position});
+    else setWindowState({mode: 'floating', normal: {...position, width, height}});
   }
 
   const stop = (event: PointerEvent<HTMLElement>) => {
     if (gesture.current?.id === event.pointerId) gesture.current = null;
   };
   let style: CSSProperties | undefined;
-  if (mini) style = {width: miniWidth, height: miniHeight,
-    left: clamp(mini.left, 0, screen.width - miniWidth), top: clamp(mini.top, 0, screen.height - miniHeight)};
-  else if (maximized) style = {left: 0, top: 0, ...screen};
-  else if (floating) style = bounds;
+  if (windowState.mode === 'minimized') style = {width: miniWidth, height: miniHeight,
+    left: clamp(windowState.position.left, 0, screen.width - miniWidth), top: clamp(windowState.position.top, 0, screen.height - miniHeight)};
+  else if (mode === 'maximized') style = {left: 0, top: 0, ...screen};
+  else style = bounds;
 
-  return createPortal(<>
-    {hidden && <button type="button" className="chat-stars chat-launcher" aria-label="Открыть ИИ-чат" title="Открыть ИИ-чат"
-      onClick={() => setClosedAway(false)}><Sparkles size={21}/></button>}
-    <section ref={panel} hidden={hidden} className={'incident-chat' + (floating ? ' chat-floating' : '')}
+  return createPortal(<section ref={panel} hidden={mode === 'closed'} className={'incident-chat' + (floating ? ' chat-floating' : '')}
     data-mode={mode} style={style} aria-labelledby="chat-title"
     onScrollCapture={event => {
       const target = event.target as HTMLElement;
@@ -150,19 +136,18 @@ export function ChatWindow({dock, children}: {dock: HTMLElement | null; children
     }}
     onPointerMove={move} onPointerUp={stop} onPointerCancel={stop} onLostPointerCapture={stop}>
     <header className="chat-titlebar" onPointerDown={e => start(e, 'move')}>
-      {floating ? <span className="chat-stars" aria-hidden="true"><Sparkles size={17}/></span> :
-        <button className="chat-stars" type="button" aria-label="Открепить ИИ-чат" title="Открепить ИИ-чат" onClick={detach}><Sparkles size={17}/></button>}
+      {mode === 'docked' ?
+        <button className="chat-stars" type="button" aria-label="Открепить ИИ-чат" title="Открепить ИИ-чат" onClick={detach}><Sparkles size={17}/></button> :
+        <span className="chat-stars" aria-hidden="true"><Sparkles size={17}/></span>}
       <h2 id="chat-title">ИИ-чат</h2>
       {floating && <div className="chat-controls">
-        {mini ? <WindowButton label="Восстановить чат" onClick={() => setMini(null)}><Copy/></WindowButton> : <>
-          <WindowButton label="Свернуть чат" onClick={() => {
-            setNormal(normal ?? bounds);
-            setMini({left: screen.width - miniWidth - 20, top: screen.height - miniHeight - 20});
-          }}><Minus/></WindowButton>
-          <WindowButton label={maximized ? 'Восстановить размер' : 'Развернуть чат'} onClick={() => {
-            setNormal(normal ?? bounds);
-            setMaximized(!maximized);
-          }}>{maximized ? <Copy/> : <Square/>}</WindowButton>
+        {windowState.mode === 'minimized' ? <WindowButton label="Восстановить чат" onClick={() =>
+          setWindowState({mode: windowState.restore, normal: windowState.normal})}><Copy/></WindowButton> : <>
+          <WindowButton label="Свернуть чат" onClick={() => setWindowState({mode: 'minimized', normal: windowState.normal,
+            restore: windowState.mode, position: {left: screen.width - miniWidth - 20, top: screen.height - miniHeight - 20}})}><Minus/></WindowButton>
+          <WindowButton label={mode === 'maximized' ? 'Восстановить размер' : 'Развернуть чат'} onClick={() =>
+            setWindowState({mode: mode === 'maximized' ? 'floating' : 'maximized', normal: windowState.normal})}>
+            {mode === 'maximized' ? <Copy/> : <Square/>}</WindowButton>
         </>}
         <WindowButton label={dock ? 'Закрыть окно и вернуть чат на дашборд' : 'Закрыть окно чата'} onClick={close}><X/></WindowButton>
       </div>}
@@ -172,7 +157,7 @@ export function ChatWindow({dock, children}: {dock: HTMLElement | null; children
       title="Изменить размер окна" onPointerDown={e => start(e, 'resize')}
       onKeyDown={e => {
         const delta: Record<string, [number, number]> = {ArrowRight: [16, 0], ArrowLeft: [-16, 0], ArrowUp: [0, -16], ArrowDown: [0, 16]};
-        if (delta[e.key]) { e.preventDefault(); resize(bounds, ...delta[e.key]); }
+        if (bounds && delta[e.key]) { e.preventDefault(); resize(bounds, ...delta[e.key]); }
       }}><MoveDiagonal2 size={13}/></button>}
-  </section></>, host);
+  </section>, host);
 }

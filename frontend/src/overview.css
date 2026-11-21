@@ -88,7 +88,6 @@
   button.chat-stars:hover { background: #dad4ec; }
   .chat-dock, .chat-host { display: contents; }
   .incident-chat[hidden] { display: none; }
-  .chat-launcher { position: fixed; right: 20px; bottom: 20px; z-index: 70; width: 44px; height: 44px; border: 1px solid #dbdeee; border-radius: 12px; box-shadow: 0 2px 10px #31294020; }
   .chat-floating { position: fixed; z-index: 70; box-shadow: 0 10px 35px #31294029, 0 2px 6px #31294012; }
   .chat-floating .chat-titlebar { padding: 8px 10px 8px 12px; min-height: 46px; user-select: none; touch-action: none; }
   .chat-floating:not([data-mode="maximized"]) .chat-titlebar { cursor: grab; }
