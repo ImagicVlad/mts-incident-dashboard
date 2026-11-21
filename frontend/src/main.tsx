@@ -45,16 +45,25 @@ function Login() {
   const [error,setError] = useState('');
   useEffect(() => {document.title = 'Вход · Пульт координатора';},[]);
   return <main className="auth-layout">
-      <section className="auth-art" aria-label="Мониторинг инцидентов"><div className="art-heading"><p className="eyebrow"><span className="signal red-dot"/> Центр координации</p><h2>Пульт<br/>координатора</h2></div>
-        <div className="radar" aria-hidden="true">
-          <div className="radar-dial"/>
-          <div className="radar-sweep"/>
-          {['one', 'two', 'three', 'four'].map(contact => (
-            <span key={contact} className={'radar-contact contact-' + contact}><i/></span>
-          ))}
-          <span className="radar-origin"/>
+      <section className="auth-art" aria-labelledby="poster-title">
+        <div className="poster-imprint">
+          <img src="/mts-logo.svg" width="36" height="36" alt="МТС"/>
+          <span>Центр координации</span>
+          <span className="poster-hours">24/7</span>
         </div>
-        <div className="art-footer"><span><i className="signal red-dot"/> Мониторинг инцидентов</span><strong>24/7</strong></div></section>
+        <h2 id="poster-title" className="poster-title"><span>Пульт</span> координатора</h2>
+        <figure className="poster-figure">
+          <div className="poster-frame">
+            <img src="/shukhov-1940.webp" alt="Вид вверх сквозь стальные фермы Шуховской радиобашни"/>
+            <div className="poster-ink" aria-hidden="true"/>
+          </div>
+          <figcaption className="poster-caption">
+            <span>Шуховская башня, 1940</span>
+            <small>В. Егоров / <a href="https://www.mos.ru/news/item/103930073/" target="_blank" rel="noreferrer">Mos.ru</a>
+              {' · '}<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a></small>
+          </figcaption>
+        </figure>
+      </section>
       <section className="auth-panel"><div className="auth-box"><p className="eyebrow">Доступ координатора</p><h1>Вход в пульт</h1>
         <p className="intro-note">Войдите под демонстрационной учётной записью.</p>
         <form onSubmit={async event => {

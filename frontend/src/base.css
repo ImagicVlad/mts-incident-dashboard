@@ -25,13 +25,13 @@ h3 { font-size: 1.16rem; letter-spacing: -.025em; font-weight: 650; }
 .back-link, .crumb { color: var(--muted); }
 .back-link:hover, .crumb a:hover, .timeline a:hover { text-decoration: underline; }
 .avatar { background: #20252d; color: white; border-radius: 50%; display: grid; place-items: center; width: 34px; height: 34px; font-size: .77rem; }
-.eyebrow, .mono, .date-stamp span, .art-footer, .route-path { font-family: var(--mono); }
+.eyebrow, .mono, .date-stamp span, .route-path { font-family: var(--mono); }
 .eyebrow { font-size: .75rem; line-height: 1.45; font-weight: 600; letter-spacing: .085em; text-transform: uppercase; display: flex; align-items: center; gap: 9px; }
 .signal { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .green { background: #157a55; }
 .red-dot { background: #ff5161; }
 .page-intro { display: flex; justify-content: space-between; align-items: end; gap: 18px; padding: 36px 0 25px; }
-.page-intro h1, .art-heading h2, .auth-box h1 { margin-top: 10px; }
+.page-intro h1, .auth-box h1 { margin-top: 10px; }
 .page-intro .eyebrow { color: var(--muted); }
 .date-stamp { font-weight: 600; text-align: right; margin-bottom: 3px; }
 .date-stamp span { display: block; color: var(--muted); margin-top: 5px; font-size: .81rem; font-weight: 400; }
@@ -112,79 +112,64 @@ h3 { font-size: 1.16rem; letter-spacing: -.025em; font-weight: 650; }
   background: white;
 }
 .auth-art {
-  --rings: #ccd4df35;
+  --paper: #efece4;
+  --poster-gutter: clamp(24px, 3.25vw, 76px);
   display: grid;
-  grid-template-rows: auto 1fr auto;
-  align-items: center;
-  gap: clamp(16px, 2.5vh, 32px);
-  padding: clamp(28px, 4vw, 80px);
-  color: #fafbfc;
-  background-color: #1b1e25;
-  background-image: linear-gradient(#e5eaff08 1px, transparent 1px),
-    linear-gradient(90deg, #e5eaff08 1px, transparent 1px),
-    radial-gradient(ellipse at 68% 65%, #32252f, transparent 64%);
-  background-size: 44px 44px, 44px 44px, auto;
+  grid-template-rows: auto auto minmax(12rem, 1fr);
+  min-width: 0;
+  background: var(--paper);
+  color: #1d1c19;
 }
-.art-heading h2 { font-size: clamp(2.8rem, 4.95vw, 6.5rem); line-height: .98; letter-spacing: -.055em; }
-.radar {
-  --period: 8s;
-  --head-start: 1.65s;
-  position: relative;
-  justify-self: center;
-  width: min(94%, 50svh, 640px);
-  aspect-ratio: 1;
-  border-radius: 50%;
-  background: radial-gradient(circle, #ff526210, transparent 65%);
+.poster-imprint {
+  margin: clamp(20px, 3.8vh, 44px) var(--poster-gutter) 0;
+  display: flex; align-items: center; gap: 12px;
+  font-size: .79rem; font-weight: 650;
 }
-.radar::before, .radar::after { content: ""; position: absolute; inset: 0; border-radius: 50%; }
-.radar::before {
-  background: repeating-conic-gradient(#c7ccd666 0deg .32deg, transparent .32deg 5deg);
-  mask-image: radial-gradient(closest-side, transparent 96%, black 96.4%);
+.poster-imprint img { display: block; }
+.poster-hours { margin-left: auto; font: .78rem var(--mono); font-variant-numeric: tabular-nums; }
+.poster-title {
+  margin: clamp(26px, 5.6vh, 68px) var(--poster-gutter) clamp(22px, 4vh, 48px);
+  font-size: clamp(3rem, 5.45vw, 7.2rem);
+  line-height: .95; font-weight: 690; letter-spacing: -.066em;
 }
-.radar::after { inset: 2.8%; border: 1px solid var(--rings); }
-.radar-dial, .radar-sweep, .radar-contact { position: absolute; inset: 3%; border-radius: 50%; }
-.radar-dial {
-  background:
-    linear-gradient(90deg, transparent calc(50% - .5px), var(--rings) 50%, transparent calc(50% + .5px)),
-    linear-gradient(transparent calc(50% - .5px), var(--rings) 50%, transparent calc(50% + .5px)),
-    repeating-radial-gradient(closest-side, transparent 0 calc(20% - 1px), var(--rings) 20%);
+.poster-title span {
+  display: block; width: fit-content; margin-bottom: .025em;
+  font: italic 400 1.14em/.91 Georgia, "Times New Roman", serif;
+  letter-spacing: -.075em;
 }
-.radar-sweep {
-  background: conic-gradient(transparent 0deg 296deg, #fa344b05 307deg, #fa344b20 329deg,
-    #fc415a42 350deg, #ff5d7366 359deg, #ff8694 359.8deg);
-  transform: rotate(74deg);
+.poster-figure { margin: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
+.poster-frame {
+  position: relative; overflow: hidden; isolation: isolate;
+  background: #cbc7c0;
 }
-.radar-origin, .radar-contact i {
-  position: absolute; left: 50%; width: clamp(5px, .55vw, 9px); aspect-ratio: 1;
-  border-radius: 50%; transform: translate(-50%, -50%);
+.poster-frame img, .poster-ink {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; object-position: 55% 47%;
 }
-.radar-origin { top: 50%; background: #ffd9df; box-shadow: 0 0 0 5px #ff526625; }
-.radar-contact { transform: rotate(calc(var(--phase) * 1turn)); }
-.contact-one   { --phase: .105; --inset: 18%; }
-.contact-two   { --phase: .304; --inset:  7%; }
-.contact-three { --phase: .605; --inset: 17%; }
-.contact-four  { --phase: .792; --inset: 29%; }
-.radar-contact i { top: var(--inset); background: #ff6277; box-shadow: 0 0 0 3px #fc51641a; }
-.radar-contact i::after {
-  content: ""; position: absolute; inset: -2px; border: 1px solid #ff7b89; border-radius: 50%; opacity: 0;
+.poster-frame img { display: block; filter: contrast(1.1); mix-blend-mode: multiply; }
+.poster-ink {
+  /* A second, slightly misregistered impression of the same photograph. */
+  background: #ff2444 url('/shukhov-1940.webp') 55% 47% / cover no-repeat;
+  background-blend-mode: multiply;
+  transform: scale(1.065);
+  transform-origin: 80% 46%;
+  clip-path: polygon(46% 0, 81% 0, 53% 100%, 18% 100%);
 }
+.poster-caption {
+  display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap;
+  gap: 4px 12px; padding: 14px var(--poster-gutter) 16px;
+  font-size: .8rem; font-weight: 600;
+}
+.poster-caption small { font-size: .69rem; font-weight: 400; color: #58564f; }
+.poster-caption a { text-decoration: underline; text-underline-offset: 2px; }
 @media (prefers-reduced-motion: no-preference) {
-  .art-heading { animation: art-arrive 620ms cubic-bezier(.22,.68,.18,1) both; }
-  .radar-sweep { animation: radar-sweep var(--period) linear calc(0s - var(--head-start)) infinite; }
-  /* Bearing and echo timing use the same fraction of one revolution. */
-  .radar-contact { --delay: calc((var(--phase) - 1) * var(--period) - var(--head-start)); }
-  .radar-contact i { animation: radar-contact var(--period) linear var(--delay) infinite; }
-  .radar-contact i::after { animation: radar-echo var(--period) var(--delay) ease-out infinite; }
-  @keyframes art-arrive { from { opacity: 0; transform: translateY(9px); } }
-  @keyframes radar-sweep { from { transform: rotate(0turn); } to { transform: rotate(1turn); } }
-  @keyframes radar-contact { 0%, 3% { opacity: 1; } 26%, 97% { opacity: .38; } }
-  @keyframes radar-echo {
-    0% { opacity: .9; transform: scale(.7); }
-    17%, 100% { opacity: 0; transform: scale(3.7); }
+  .poster-ink { animation: print-pass 12s cubic-bezier(.52,.04,.27,1) -2s infinite; }
+  @keyframes print-pass {
+    0%, 100% { clip-path: polygon(32% 0, 56% 0, 28% 100%, 4% 100%); }
+    30%, 40% { clip-path: polygon(68% 0, 108% 0, 80% 100%, 40% 100%); }
+    66% { clip-path: polygon(53% 0, 66% 0, 38% 100%, 25% 100%); }
   }
 }
-.art-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid var(--rings); padding-top: 13px; font-size: .79rem; }
-.art-footer span { display: flex; align-items: center; gap: 7px; }.art-footer strong { font-size: 1.15rem; }
 .auth-panel { display: grid; place-items: center; padding: 40px clamp(24px, 5vw, 88px); }.auth-box { width: min(100%, 440px); }.auth-box .eyebrow { color: var(--muted); }
 .auth-box h1 { font-size: clamp(2.25rem,3.7vw,3.5rem); }.intro-note { color: var(--muted); margin: 12px 0 32px; line-height: 1.5; }
 .auth-box form { display: grid; gap: 18px; }.auth-box label { display: grid; gap: 7px; font-weight: 560; font-size: .91rem; }
@@ -202,10 +187,18 @@ h3 { font-size: 1.16rem; letter-spacing: -.025em; font-weight: 650; }
   .work-grid,.record-grid,.show-grid { grid-template-columns: 1fr; }.metrics { grid-template-columns: 1fr 1fr; }
   .page-intro { flex-wrap: wrap; align-items: start; padding: 25px 0 17px; }.date-stamp { text-align: left; font-size: .88rem; }
   .auth-layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
-  .auth-art { padding: clamp(20px, 5vw, 32px); grid-template: auto auto / minmax(0,1fr) clamp(66px, 23vw, 148px); gap: 16px 8px; }
-  .art-heading h2 { font-size: clamp(1.6rem, 7vw, 3.5rem); }
-  .auth-art .radar { width: 100%; }
-  .art-footer { grid-column: 1 / -1; }
+  .auth-art {
+    grid-template: "imprint photo" auto "title photo" 1fr "caption caption" auto / minmax(0, 1.55fr) minmax(0, 1fr);
+    --poster-gutter: clamp(14px, 4vw, 28px);
+  }
+  .poster-imprint { grid-area: imprint; gap: 8px; margin: 16px var(--poster-gutter) 0; font-size: .69rem; }
+  .poster-imprint img { width: 25px; height: 25px; }
+  .poster-hours { display: none; }
+  .poster-title { grid-area: title; align-self: end; margin: 24px var(--poster-gutter) 18px; font-size: clamp(1.65rem, 6.4vw, 3.05rem); }
+  .poster-figure { display: contents; }
+  .poster-frame { grid-area: photo; }
+  .poster-caption { grid-area: caption; padding: 9px var(--poster-gutter); font-size: .68rem; }
+  .poster-caption small { font-size: .62rem; }
   .auth-panel { padding: clamp(24px, 6vw, 40px); }.show-grid { gap: 14px; }
   .work-grid { grid-template-areas: "side" "queue"; }.rail { grid-area: side; grid-template-columns: repeat(2,minmax(0,1fr)); }.rail .ai-note { grid-column: 1/-1; }.queue { grid-area: queue; }
 }
@@ -216,15 +209,15 @@ h3 { font-size: 1.16rem; letter-spacing: -.025em; font-weight: 650; }
   .facts div { grid-template-columns: 1fr; gap: 4px; }.card-top { gap: 7px; }.screen-frame { padding: 12px 12px 0; }
 }
 @media (max-height: 640px) {
-  .auth-art { padding: 16px 24px; gap: 10px; }
-  .auth-art .art-heading h2 { margin-top: 6px; }
   .auth-panel { padding: 16px 24px; }
   .auth-box .intro-note { margin: 8px 0 18px; }
   .auth-box form { gap: 12px; }
 }
 @media (min-width: 761px) and (max-height: 520px) {
   .auth-panel { padding-block: 12px; }
-  .art-heading h2 { font-size: 2.25rem; }
-  .auth-art .radar { width: min(88%, 43svh); }
+  .auth-art { grid-template-rows: auto auto minmax(5rem,1fr); }
+  .poster-imprint { margin-top: 12px; }
+  .poster-title { margin-block: 10px 12px; font-size: 2.5rem; }
+  .poster-caption { padding-block: 8px; }
   .auth-box h1 { font-size: 2rem; }
 }
