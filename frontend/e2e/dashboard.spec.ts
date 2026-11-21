@@ -7,6 +7,65 @@ async function replace(contents: string) {
   await rename(file + '.writing', file);
 }
 
+test('карточки сохраняют расположение статуса, срока и SLA при переносе текста и пропусках в данных', async ({page}) => {
+  const original = await readFile(file, 'utf8');
+  const [urgent, coordinator, sparse, , review] = JSON.parse(original);
+  urgent.deadline = new Date(Date.now() - 3_600_000).toISOString();
+  urgent.header = 'Нарушена доставка событий в региональные системы мониторинга. '.repeat(4).trim();
+  urgent.assignedGroupName = 'Поддержка ' + 'МежрегиональнаяПлатформа'.repeat(5);
+  urgent.assignedEmployee = 'Дежурный ' + 'ДвойнаяФамилия'.repeat(6);
+  urgent.productName = 'МониторингСети'.repeat(6);
+  Object.assign(sparse, {priorityId: 4, productName: null, header: null, submitDate: null, deadline: null,
+    assignedGroupName: null, assignedEmployee: null, lastAssignmentToTeamDateTime: null});
+  review.deadline = null;
+  const card = (group: string, id: string) => page.getByTestId('group-' + group).locator(`[data-incident-id="${id}"]`);
+  try {
+    await replace(JSON.stringify([urgent, coordinator, sparse, review]));
+    await page.goto('/login');
+    await page.getByRole('button', {name: 'Войти', exact: true}).click();
+    const overdue = card('critical', urgent.id);
+    const high = card('high', coordinator.id);
+    const research = card('review', review.id);
+    await expect(overdue.locator('.time-left')).toContainText('Просрочен');
+    await expect(high.locator('.time-left')).toContainText('Осталось');
+    await expect(high.locator('.card-dates > span').first()).toContainText('У координаторов с');
+    await expect(high.locator('.card-dates > span').last()).toContainText('Срок устранения');
+    await expect(research.locator('.time-left')).toContainText('Сбой устранён');
+    await expect(research).not.toContainText('Срок устранения');
+    const minimal = card('critical', sparse.id);
+    await expect(minimal).toBeVisible();
+    await expect(minimal.locator('h3, .product, .card-meta, .card-foot')).toHaveCount(0);
+    for (const [item, source] of [[coordinator, high], [review, research]] as const) {
+      await expect(card('assigned', item.id)).toHaveText(await source.innerText(), {useInnerText: true});
+    }
+
+    for (const width of [1440, 820, 390, 320]) {
+      await page.setViewportSize({width, height: 900});
+      for (const entry of [overdue, high, card('assigned', coordinator.id), research]) {
+        const layout = await entry.evaluate(el => {
+          const rect = (selector: string) => el.querySelector(selector)!.getBoundingClientRect();
+          const header = rect('.card-top'), pill = rect('.pill'), identity = rect('.card-identity');
+          const id = rect('.mono'), product = rect('.product');
+          const title = rect('h3'), meta = rect('.card-meta'), foot = rect('.card-foot');
+          const dates = rect('.card-dates'), timer = rect('.time-left');
+          return {
+            statusRight: header.right - pill.right, statusTop: pill.top - header.top,
+            timerRight: foot.right - timer.right, timerBottom: foot.bottom - timer.bottom,
+            datesLeft: dates.left - foot.left, zonesSeparate: dates.right <= timer.left || dates.bottom <= timer.top,
+            identityOrdered: id.right <= product.left && product.right <= pill.left && product.top < id.bottom,
+            rowsOrdered: identity.right <= pill.left && header.bottom < title.top && title.bottom < meta.top && meta.bottom < foot.top,
+            overflows: el.scrollWidth > el.clientWidth || document.documentElement.scrollWidth > innerWidth,
+          };
+        });
+        expect(layout).toEqual({statusRight: 0, statusTop: 0, timerRight: 0, timerBottom: 0, datesLeft: 0,
+          zonesSeparate: true, identityOrdered: true, rowsOrdered: true, overflows: false});
+      }
+    }
+    await overdue.click();
+    await expect(page.getByRole('heading', {name: urgent.header, exact: true})).toBeVisible();
+  } finally { await replace(original); }
+});
+
 test('сводка показывает пример назначения и скрывает совет после передачи команде', async ({page}) => {
   const original = await readFile(file, 'utf8');
   const records = JSON.parse(original);

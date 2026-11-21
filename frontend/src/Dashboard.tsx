@@ -33,17 +33,31 @@ function Card({item,group,now,animate,priority,onCoordinators}:{item:Incident;gr
   const {formats:{stamp}} = useLive();
   const reduced = useReducedMotion();
   const countdown = active(item) ? remaining(item.deadline,now) : null;
-  const research = item.stateEnum === 'Research';
+  const coordinatorSince = onCoordinators ? item.lastAssignmentToTeamDateTime : null;
+  const restoredAt = finished(item) || item.stateEnum === 'Research' ? item.completionDate : null;
   return <motion.div initial={animate && !reduced ? {opacity:0,y:6} : false} animate={{opacity:1,y:0}} transition={{duration:reduced?0:0.24}}>
     <Link data-incident-id={item.id} data-priority={priority} to={pathFor(item.id)} className={group==='history'?'incident resolved':'incident'}>
-      <div className="card-top"><span className="mono">{item.id}</span><span className="product">{item.productName || 'Продукт не указан'}</span><Pill item={item} label={overviewStatus(item,onCoordinators)}/></div>
-      <h3>{item.header || 'Без заголовка'}</h3>
-      <div className="card-foot"><span>Начало <b>{stamp(item.submitDate)}</b></span><span>Текущая команда <b className={item.assignedGroupName?'':'team-pending'} title={item.assignedGroupName || 'Команда не указана'}>{item.assignedGroupName || '?'}</b></span><span>Исполнитель <b>{item.assignedEmployee || 'Не указан'}</b></span>
-        {group === 'assigned' && item.lastAssignmentToTeamDateTime && <span>У координаторов с <b>{stamp(item.lastAssignmentToTeamDateTime)}</b></span>}
-        {(!research || item.deadline) && <span>Срок устранения <b>{stamp(item.deadline)}</b></span>}
-        {countdown && <strong className={'time-left'+(countdown.overdue?' overdue':'')}>{countdown.text}</strong>}
-        {(finished(item) || research) && item.completionDate && <strong className="time-left">Сбой устранён {stamp(item.completionDate)}</strong>}
+      <div className="card-top">
+        <div className="card-identity min-w-0">
+          <span className="mono">{item.id}</span>
+          {item.productName && <span className="product">{item.productName}</span>}
+        </div>
+        <Pill item={item} label={overviewStatus(item,onCoordinators)}/>
       </div>
+      {item.header && <h3>{item.header}</h3>}
+      {(item.submitDate || item.assignedGroupName || item.assignedEmployee) && <div className="card-meta">
+        {item.submitDate && <span>Начало <b><time dateTime={item.submitDate}>{stamp(item.submitDate)}</time></b></span>}
+        {item.assignedGroupName && <span className="col-start-2">Текущая команда <b>{item.assignedGroupName}</b></span>}
+        {item.assignedEmployee && <span className="col-start-3">Исполнитель <b>{item.assignedEmployee}</b></span>}
+      </div>}
+      {(coordinatorSince || item.deadline || restoredAt) && <div className="card-foot">
+        {(coordinatorSince || item.deadline) && <div className="card-dates grid min-w-0 gap-1">
+          {coordinatorSince && <span>У координаторов с <b><time dateTime={coordinatorSince}>{stamp(coordinatorSince)}</time></b></span>}
+          {item.deadline && <span>Срок устранения <b><time dateTime={item.deadline}>{stamp(item.deadline)}</time></b></span>}
+        </div>}
+        {countdown && <strong className={'time-left'+(countdown.overdue?' overdue':'')}>{countdown.text}</strong>}
+        {restoredAt && <strong className="time-left">Сбой устранён <time dateTime={restoredAt}>{stamp(restoredAt)}</time></strong>}
+      </div>}
     </Link>
   </motion.div>;
 }
