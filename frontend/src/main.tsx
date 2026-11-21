@@ -44,10 +44,16 @@ function Login() {
   const [pending,setPending] = useState(false);
   const [error,setError] = useState('');
   useEffect(() => {document.title = 'Вход · Пульт координатора';},[]);
-  return <><header className="topbar"><div className="bar-inner"><img src="/mts-logo.svg" width="40" height="40" alt="МТС"/><span className="bar-rule"/><span className="app-name">Пульт координатора</span></div></header>
-    <main className="auth-layout">
+  return <main className="auth-layout">
       <section className="auth-art" aria-label="Мониторинг инцидентов"><div className="art-heading"><p className="eyebrow"><span className="signal red-dot"/> Центр координации</p><h2>Пульт<br/>координатора</h2></div>
-        <div className="radar" aria-hidden="true"><div className="radar-glow"/><div className="radar-orbit"/>{['one','two','three','four'].map(n => <b key={n} className={'blip blip-' + n}/>)}</div>
+        <div className="radar" aria-hidden="true">
+          <div className="radar-dial"/>
+          <div className="radar-sweep"/>
+          {['one', 'two', 'three', 'four'].map(contact => (
+            <span key={contact} className={'radar-contact contact-' + contact}><i/></span>
+          ))}
+          <span className="radar-origin"/>
+        </div>
         <div className="art-footer"><span><i className="signal red-dot"/> Мониторинг инцидентов</span><strong>24/7</strong></div></section>
       <section className="auth-panel"><div className="auth-box"><p className="eyebrow">Доступ координатора</p><h1>Вход в пульт</h1>
         <p className="intro-note">Войдите под демонстрационной учётной записью.</p>
@@ -61,7 +67,7 @@ function Login() {
           {error && <p className="form-error" role="alert">{error}</p>}
           <button className="button primary" disabled={pending}>{pending ? 'Входим…' : 'Войти'}</button>
         </form></div></section>
-    </main></>;
+    </main>;
 }
 function LegacyIncident() {
   const hash = useLocation().hash.slice(1);
