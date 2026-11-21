@@ -22,18 +22,26 @@ test('сводка показывает пример назначения и с�
     await expect(page).toHaveURL(/\/dashboard$/);
     await page.goto('/incidents/' + incident.id);
     const section = page.locator('section.ai-note');
+    const paper = page.locator('.record-grid > .paper');
+    const bottom = (locator: typeof paper) => locator.evaluate(el => el.getBoundingClientRect().bottom);
+    expect(await bottom(section)).toBeLessThan(await bottom(paper));
     await page.route('**/api/ai/summary', async route => {
       const live = await page.request.get('/api/incidents');
       const {epoch, snapshotVersion, serverTime, incidents} = await live.json();
       const assigned = incidents.find((row: {id: string}) => row.id === incident.id).assignedGroupName;
       await route.fulfill({json: {epoch, snapshotVersion, asOf: serverTime, answer: 'Сводка', assessment: {
-        situation: 'Пробные платежи задерживаются.', impact: 'Два платежа находятся в обработке.',
+        situation: 'Пробные платежи задерживаются.', impact: 'Два платежа находятся в обработке. '.repeat(80),
         check: 'Сверить время зачисления двух платежей.',
         routing: assigned ? null : {team: 'Расчёты', exampleId: example.id, reason: 'Совпадает сервис зачисления.'},
       }}});
     });
     await section.getByRole('button', {name: 'Сформировать сводку'}).click();
     await expect(section.getByRole('heading', {name: 'Что проверить'})).toBeVisible();
+    const summaryText = section.getByRole('region', {name: 'Текст ИИ-сводки'});
+    await expect.poll(async () => Math.abs(await bottom(section) - await bottom(paper))).toBeLessThan(1);
+    await summaryText.press('Control+End');
+    await expect.poll(() => summaryText.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+    expect(await bottom(section.getByRole('button'))).toBeLessThan(await bottom(section));
     await expect(section.getByRole('link', {name: 'Похожий инцидент · ' + example.id})).toHaveAttribute('href', '/incidents/' + example.id);
     incident.assignedGroupName = 'Расчёты';
     await replace(JSON.stringify(records));

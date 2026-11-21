@@ -80,7 +80,7 @@ export function Summary({item}:{item:Incident}) {
   };
   return <section className="ai-note"><h2 className="eyebrow"><Sparkles size={16}/> ИИ-сводка</h2>
     {configured===false && <p>ИИ не настроен. Для сводки требуется подключение провайдера на сервере.</p>}
-    {notes && <div className="summary-sections">
+    {notes && <div className="summary-sections" role="region" aria-label="Текст ИИ-сводки" tabIndex={0}>
       <p className="answer-text"><AnswerText text={notes.situation}/></p>
       <section><h3>Влияние</h3><p className="answer-text"><AnswerText text={notes.impact}/></p></section>
       {routing && <section className="summary-routing"><h3>Рекомендация по команде</h3>
