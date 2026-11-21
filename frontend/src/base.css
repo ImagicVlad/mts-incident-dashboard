@@ -12,8 +12,7 @@ a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid 
 h1, h2, h3, p { margin: 0; }
 h1, h2, h3 { line-height: 1.08; }
 h1 { font-size: clamp(2.45rem, 4.4vw, 4.15rem); letter-spacing: -.055em; font-weight: 650; }
-h2, .category-caption { font-size: 1.45rem; }
-h2 { letter-spacing: -.035em; font-weight: 650; }
+h2 { font-size: 1.45rem; letter-spacing: -.035em; font-weight: 650; }
 h3 { font-size: 1.16rem; letter-spacing: -.025em; font-weight: 650; }
 .topbar { background: white; border-bottom: 1px solid var(--line); }
 .bar-inner, .container { width: min(100% - 80px, 1360px); margin-inline: auto; }
@@ -37,7 +36,7 @@ h3 { font-size: 1.16rem; letter-spacing: -.025em; font-weight: 650; }
 .metrics { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; }
 .metric, .incident, .feed, .ai-note, .paper, .screen-card { background: #fff; border: 1px solid var(--line); border-radius: 12px; }
 .metric { display: flex; flex-direction: column; align-items: start; gap: 8px; padding: 17px 20px; }
-.metric-heading { display: flex; align-items: center; gap: 8px; max-width: 100%; }
+.metric-heading { display: flex; align-items: center; gap: 8px; max-width: 100%; font-size: 1.125rem; }
 .category-caption { display: inline-flex; align-items: last baseline; gap: .38em; line-height: 1.25; letter-spacing: -.015em; }
 .metric:hover, .incident:hover, .screen-card:hover { border-color: #9099a3; }
 .metric.red { background: #fff4f4; border-color: #f0c3c6; }
@@ -158,6 +157,7 @@ h3 { font-size: 1.16rem; letter-spacing: -.025em; font-weight: 650; }
   .work-grid { grid-template-areas: "side" "queue"; }.rail { grid-area: side; grid-template-columns: repeat(2,minmax(0,1fr)); }.rail .ai-note { grid-column: 1/-1; }.queue { grid-area: queue; }
 }
 @media(max-width:520px) {
+  .metric-heading { font-size: 1rem; }
   .bar-inner,.container { width: calc(100% - 24px); }.bar-inner { gap: 9px; min-height: 54px; }.bar-end { gap: 6px; }.avatar { display: none; }.app-name,.back-link { font-size: .79rem; }
   .metrics { gap: 8px; }.metric { padding: 12px; }.metric small { font-size: .77rem; }
   .rail { grid-template-columns: 1fr; }.rail .ai-note { grid-column: auto; }.time-left { margin-left: 0; }.incident { padding: 13px; }
