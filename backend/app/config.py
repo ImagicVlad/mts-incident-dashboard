@@ -29,7 +29,7 @@ class Settings(BaseSettings):
 
     llm_api_key: SecretStr | None = None
     llm_base_url: str = "https://api.openai.com/v1"
-    llm_model: str = "gpt-4.1-mini"
+    llm_model: str = "gpt-5.4-mini"
     llm_timeout_seconds: float = Field(30, gt=0, le=120)
     llm_requests_per_minute: int = Field(12, ge=1, le=600)
     llm_max_concurrent: int = Field(2, ge=1, le=16)
