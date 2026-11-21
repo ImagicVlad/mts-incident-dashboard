@@ -125,8 +125,8 @@ def test_events_content_comparison_and_recovery(tmp_path):
         save(source, rows)
         await store.reload()
         before = store.snapshot()
-        assert {n["kind"] for n in before["notifications"]} == {"critical", "assigned"}
-        assert len({n["eventId"] for n in before["notifications"]}) == 2
+        assert [n["kind"] for n in before["notifications"]] == ["critical_assigned"]
+        Snapshot.model_validate(before)
         save(source, [dict(reversed(record.items())) for record in reversed(rows)])
         source.write_text(" \n" + source.read_text(encoding="utf-8"), encoding="utf-8")
         await store.reload()
@@ -166,7 +166,7 @@ def test_events_content_comparison_and_recovery(tmp_path):
         await store.reload()
         research = store.snapshot()
         assert research["groups"]["review"] == research["groups"]["assigned"] == ["C"]
-        assert research["notifications"][0]["kind"] == "assigned"
+        assert [n["kind"] for n in research["notifications"][:2]] == ["assigned", "research"]
 
         rows[0].update(stateEnum="WorkInProgress", priorityId=4)
         save(source, rows[:1])
@@ -175,7 +175,7 @@ def test_events_content_comparison_and_recovery(tmp_path):
         rows[0].update(stateEnum="Research", priorityId=2)
         save(source, rows[:1])
         await store.reload()
-        assert store.snapshot()["notifications"][0]["kind"] == "resolved"
+        assert store.snapshot()["notifications"][0]["kind"] == "research"
 
     asyncio.run(scenario())
 
@@ -263,13 +263,47 @@ async def test_clock_escalates_once_on_last_valid_snapshot(tmp_path, monkeypatch
         assert escalated["sourceStatus"] == previous["sourceStatus"]
         assert [(n["incidentId"], n["kind"]) for n in escalated["notifications"]] == [("H", "critical")]
 
-        clock += timedelta(hours=1)
+        clock += timedelta(minutes=30)
         save(source, data)
         await store.reload()
         restored = store.snapshot()
         assert restored["sourceStatus"] == "ok"
         assert restored["snapshotVersion"] == escalated["snapshotVersion"] + int(broken_source)
         assert restored["notifications"] == escalated["notifications"]
+
+        clock += timedelta(minutes=30)
+        breached = await asyncio.wait_for(anext(updates), 6)
+        if breached["snapshotVersion"] == restored["snapshotVersion"]:
+            breached = await asyncio.wait_for(anext(updates), 6)
+        assert [n["kind"] for n in breached["notifications"]] == ["overdue", "critical"]
+        assert breached["dataUpdatedAt"] == initial["dataUpdatedAt"]
     finally:
         await updates.aclose()
         await store.stop()
+
+
+def test_one_sla_breach_per_active_incident(tmp_path, monkeypatch):
+    clock = datetime(2030, 1, 1, 12, tzinfo=UTC)
+    monkeypatch.setattr("app.store.utc_now", lambda: clock)
+    past = (clock - timedelta(minutes=1)).isoformat()
+    future = (clock + timedelta(minutes=1)).isoformat()
+    rows = [row("existing", deadline=past), row("low", priorityId=1, deadline=future),
+            row("solved", deadline=future), row("research", deadline=future), row("no-deadline")]
+    store = Store(tmp_path / "incidents.json", False)
+    store._accept(normalize_records(rows))
+    assert store.snapshot()["notifications"] == []
+    rows[2]["stateEnum"] = "Closed"
+    rows[3]["stateEnum"] = "Research"
+    store._accept(normalize_records(rows))
+    clock += timedelta(minutes=1)
+    store._refresh_clock()
+    rows[1]["header"] = "Уточнение по сбою"
+    store._accept(normalize_records(rows))
+    rows[1]["deadline"] = (clock + timedelta(minutes=5)).isoformat()
+    store._accept(normalize_records(rows))
+    clock += timedelta(minutes=5)
+    store._refresh_clock()
+    events = store.snapshot()["notifications"]
+    assert [(e["incidentId"], e["kind"]) for e in events] == [
+        ("low", "overdue"), ("solved", "resolved"), ("research", "research"),
+    ]

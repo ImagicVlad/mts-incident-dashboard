@@ -40,7 +40,8 @@ export function LiveProvider({children}: {children: ReactNode}) {
       const sameRun = previous?.epoch === data.epoch;
       if (isLive && previous && sameRun && !baseline) {
         const oldIds = new Set(previous.notifications.map(n => n.eventId));
-        const added = data.notifications.filter(n => !oldIds.has(n.eventId));
+        const added = data.notifications.filter(n =>
+          !oldIds.has(n.eventId) && n.kind !== 'research' && n.kind !== 'resolved');
         if (added.length) {
           setToasts(old => [...added, ...old].slice(0,3));
           const ids = new Set(added.map(n => n.eventId));

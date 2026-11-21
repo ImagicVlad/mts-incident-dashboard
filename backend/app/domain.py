@@ -77,7 +77,7 @@ class Incident(RawIncident):
 class Notification(BaseModel):
     eventId: str
     incidentId: str
-    kind: Literal["critical", "assigned", "resolved"]
+    kind: Literal["critical", "assigned", "critical_assigned", "research", "resolved", "overdue"]
     label: str
     time: str
 
@@ -269,9 +269,15 @@ def transitions(before: dict[str, Incident], after: dict[str, Incident],
     for id_, item in sorted(after.items()):
         previous = memberships(before[id_], previous_now) if id_ in before else set()
         current = memberships(item, now)
-        if "critical" in current - previous:
-            yield id_, "critical", "Новый критический инцидент"
-        if "assigned" in current - previous:
+        entered = current - previous
+        if "review" in entered:
+            yield id_, "research", "Инцидент перешёл в исследование"
+        if "history" in entered:
+            label = "Инцидент закрыт" if item.stateEnum == "Closed" else "Инцидент решён"
+            yield id_, "resolved", label
+        if {"critical", "assigned"} <= entered:
+            yield id_, "critical_assigned", "Критический инцидент поступил координаторам"
+        elif "critical" in entered:
+            yield id_, "critical", "Инцидент стал критическим"
+        elif "assigned" in entered:
             yield id_, "assigned", "Назначен на координаторов"
-        if "critical" in previous and item.stateEnum in HISTORY | {"Research"}:
-            yield id_, "resolved", "Критический инцидент устранён"

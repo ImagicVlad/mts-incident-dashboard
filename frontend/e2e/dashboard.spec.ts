@@ -8,6 +8,58 @@ async function replace(contents: string) {
   await rename(file + '.writing', file);
 }
 
+test('срочные события всплывают один раз, просмотр ленты снимает точку', async ({page}) => {
+  const original = await readFile(file, 'utf8');
+  const issue = {id: 'NOTICE-1', stateEnum: 'Assigned', priorityId: 2, assignedGroupName: '', deadline: ''};
+  const records = JSON.parse(original);
+  const publish = () => replace(JSON.stringify([...records, issue]));
+  const bell = page.getByRole('button', {name: /^Оповещения/});
+  const dot = bell.locator('i');
+  const panel = page.locator('.notifications-panel');
+  const toast = page.locator('.toast').filter({hasText: issue.id});
+  try {
+    await publish();
+    await page.goto('/login');
+    await Promise.all([
+      page.waitForResponse(response => response.url().endsWith('/api/incidents/events')),
+      page.getByRole('button', {name: 'Войти', exact: true}).click(),
+    ]);
+    await bell.click();
+    await page.keyboard.press('Escape');
+    Object.assign(issue, {priorityId: 4, assignedGroupName: 'КЦ ИТ Координаторы Массовых Инцидентов'});
+    await publish();
+    await expect(toast).toHaveCount(1);
+    await expect(toast).toContainText('Критический инцидент поступил координаторам');
+    await expect(dot).toBeVisible();
+    await toast.getByRole('button').click();
+    await expect(dot).toBeVisible();
+    await bell.click();
+    await expect(panel.getByRole('link').filter({hasText: issue.id})).toHaveCount(1);
+    await expect(dot).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await page.reload();
+    await expect(bell).toBeVisible();
+    await expect(dot).toHaveCount(0);
+
+    issue.deadline = new Date(Date.now() - 1000).toISOString();
+    await publish();
+    await expect(toast).toContainText('Нарушен срок SLA');
+    await toast.getByRole('button').click();
+    issue.stateEnum = 'Research';
+    await publish();
+    await bell.click();
+    const issueEvents = panel.getByRole('link').filter({hasText: issue.id});
+    await expect(issueEvents.filter({hasText: 'Инцидент перешёл в исследование'})).toBeVisible();
+    await expect(toast).toHaveCount(0);
+    issue.stateEnum = 'Resolved';
+    await publish();
+    await expect(issueEvents.filter({hasText: 'Инцидент решён'})).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dot).toHaveCount(0);
+    await expect(toast).toHaveCount(0);
+  } finally { await replace(original); }
+});
+
 test('краткие карточки показывают команду и живой SLA, исполнитель и срок доступны в подробностях', async ({page}) => {
   const original = await readFile(file, 'utf8');
   const [urgent, coordinator, sparse, , review] = JSON.parse(original);
@@ -248,6 +300,13 @@ test('инцидент меняет очередь при достижении �
     const highCount = page.locator('.metric[href="#high"] .count');
     const criticalCount = page.locator('.metric[href="#critical"] .count');
 
+    const bell = page.getByRole('button', {name: /Оповещения/});
+    const alerts = page.locator('.notifications-panel .result-link')
+      .filter({hasText: issue.id}).filter({hasText: 'Инцидент стал критическим'});
+    await bell.click();
+    const earlierAlerts = await alerts.count();
+    await page.keyboard.press('Escape');
+
     // The final quarter of this 160-second interval starts six seconds from now.
     const now = Date.now();
     issue.submitDate = new Date(now - 114_000).toISOString();
@@ -264,8 +323,8 @@ test('инцидент меняет очередь при достижении �
     await expect(highCount).toHaveText('2');
     await expect(criticalCount).toHaveText('2');
 
-    await page.getByRole('button', {name:/Оповещения/}).click();
-    await expect(page.locator('.notifications-panel .result-link').filter({hasText:issue.id})).toHaveCount(1);
+    await bell.click();
+    await expect(alerts).toHaveCount(earlierAlerts + 1);
     await page.keyboard.press('Escape');
     issue.deadline = new Date(now + 4 * 3_600_000).toISOString();
     await replace(JSON.stringify(data));

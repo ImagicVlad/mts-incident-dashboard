@@ -9,7 +9,10 @@ export interface Incident {
   lastAssignmentToTeamDateTime: string | null;
   service?: string | null; diagnostics: string[];
 }
-export interface Notice { eventId: string; incidentId: string; kind: string; label: string; time: string }
+export interface Notice {
+  eventId: string; incidentId: string; label: string; time: string;
+  kind: 'critical' | 'assigned' | 'critical_assigned' | 'overdue' | 'research' | 'resolved';
+}
 export interface Snapshot {
   epoch: string; snapshotVersion: number; serverTime: string; loadedAt: string | null;
   dataUpdatedAt: string | null; sourceStatus: 'ok' | 'error'; sourceError: string | null;

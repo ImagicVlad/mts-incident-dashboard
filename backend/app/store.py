@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from watchfiles import awatch
 
-from .domain import Incident, classify, critical_from, normalize_records, transitions, utc_string
+from .domain import OPEN, Incident, classify, critical_from, normalize_records, transitions, utc_string
 
 
 def utc_now() -> datetime:
@@ -33,7 +33,8 @@ class Store:
         self._items: dict[str, Incident] = {}
         self._groups = classify({})
         self._classified_at: datetime | None = None
-        self._next_escalation: datetime | None = None
+        self._next_clock_event: datetime | None = None
+        self._breached_ids: set[str] = set()
         self._rows: list[dict] = []
         self._diagnostics: list[str] = []
         self._events: deque[dict] = deque(maxlen=100)
@@ -112,21 +113,34 @@ class Store:
                 self._publish()
 
     def _regroup(self, items: dict[str, Incident], at: datetime) -> None:
-        if self._classified_at is not None:
-            events = transitions(self._items, items, now=at, previous_now=self._classified_at)
-            for index, (id_, kind, label) in enumerate(events):
-                self._events.appendleft({
-                    "eventId": f"{self.epoch}-{self._version + 1}-{index}",
-                    "incidentId": id_, "kind": kind, "label": label, "time": utc_string(at),
-                })
+        initial = self._classified_at is None
+        events = [] if initial else list(transitions(self._items, items, now=at, previous_now=self._classified_at))
+        thresholds = []
+        for item in items.values():
+            critical_at = critical_from(item)
+            if critical_at and critical_at > at:
+                thresholds.append(critical_at)
+            if item.stateEnum not in OPEN or not item.deadline or item.id in self._breached_ids:
+                continue
+            deadline = datetime.fromisoformat(item.deadline)
+            if deadline > at:
+                thresholds.append(deadline)
+            else:
+                self._breached_ids.add(item.id)
+                if not initial:
+                    events.append((item.id, "overdue", "Нарушен срок SLA"))
+        for index, (id_, kind, label) in enumerate(events):
+            self._events.appendleft({
+                "eventId": f"{self.epoch}-{self._version + 1}-{index}",
+                "incidentId": id_, "kind": kind, "label": label, "time": utc_string(at),
+            })
         self._groups = classify(items, now=at)
-        thresholds = (critical_from(item) for item in items.values())
-        self._next_escalation = min((time for time in thresholds if time and time > at), default=None)
+        self._next_clock_event = min(thresholds, default=None)
         self._classified_at = at
 
     def _refresh_clock(self) -> None:
         at = utc_now()
-        if self._next_escalation is not None and at >= self._next_escalation:
+        if self._next_clock_event is not None and at >= self._next_clock_event:
             self._regroup(self._items, at)
             self._publish()
 
