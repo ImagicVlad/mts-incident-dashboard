@@ -217,11 +217,12 @@ def memberships(item: Incident, now: datetime | None = None) -> set[str]:
     if item.stateEnum in OPEN:
         if item.priorityId == CRITICAL_PRIORITY:
             groups.add("critical")
-        if item.priorityId == HIGH_PRIORITY:
-            groups.add("high")
+        elif item.priorityId == HIGH_PRIORITY:
             threshold = critical_from(item)
             if threshold is not None and (now or datetime.now(UTC)) >= threshold:
                 groups.add("critical")
+            else:
+                groups.add("high")
     if item.stateEnum in COORDINATOR_STATES and item.assignedGroupName == COORDINATORS:
         groups.add("assigned")
     if item.stateEnum == "Research":

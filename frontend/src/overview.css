@@ -4,11 +4,12 @@
     color: inherit; font: inherit; letter-spacing: inherit; text-align: left; cursor: pointer;
   }
   .category-name, .metric-name { text-decoration: underline; text-decoration-color: #a9aeb6; text-decoration-thickness: 1px; text-underline-offset: .15em; }
-  .category-toggle:hover .category-name, .metric:hover .metric-name { color: #bd1023; text-decoration-color: currentColor; }
+  .category-toggle:hover .category-name, .metric:hover .metric-name { color: var(--metric-hover, #bd1023); text-decoration-color: currentColor; }
   .category-toggle:focus-visible { outline: 2px solid #bd1023; outline-offset: 4px; }
   .category-toggle svg { flex: none; color: var(--muted); }
   .category-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
   .dashboard-bar, .overview { --attention: #ac4a00; --attention-tint: #fff0df; }
+  .overview { --high-accent: #cd630f; }
   .critical-reason { margin: 0 0 8px; color: #9d2332; font-size: .83rem; font-weight: 600; }
   .card-foot .team-pending { display: inline-block; min-width: 1.4em; padding: 1px 4px; border-radius: 5px; color: var(--attention); background: var(--attention-tint); text-align: center; font-weight: 700; line-height: 1.25; }
   .dashboard-bar { position: sticky; top: 0; z-index: 20; }

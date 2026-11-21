@@ -238,7 +238,8 @@ async def test_clock_escalates_once_on_last_valid_snapshot(tmp_path, monkeypatch
 
         clock += timedelta(hours=3)
         escalated = await asyncio.wait_for(anext(updates), 6)
-        assert escalated["groups"]["critical"] == escalated["groups"]["high"] == ["H"]
+        assert escalated["groups"]["critical"] == ["H"] and escalated["groups"]["high"] == []
+        assert escalated["counts"]["critical"] == 1 and escalated["counts"]["high"] == 0
         assert escalated["snapshotVersion"] == previous["snapshotVersion"] + 1
         assert escalated["loadedAt"] == escalated["dataUpdatedAt"] == initial["loadedAt"]
         assert escalated["sourceStatus"] == previous["sourceStatus"]

@@ -22,9 +22,12 @@ def test_high_priority_enters_at_quarter_capped_at_one_hour(hours, lead_minutes)
     items = incidents(submitDate=(DEADLINE - timedelta(hours=hours)).isoformat())
     threshold = DEADLINE - timedelta(minutes=lead_minutes)
     assert critical_from(items["H"]) == threshold
-    assert classify(items, threshold - STEP)["critical"] == []
+    before = classify(items, threshold - STEP)
+    assert before["high"] == before["assigned"] == ["H"]
+    assert before["critical"] == []
     groups = classify(items, threshold)
-    assert groups["critical"] == groups["high"] == groups["assigned"] == ["H"]
+    assert groups["critical"] == groups["assigned"] == ["H"]
+    assert groups["high"] == []
     assert classify(items, DEADLINE + STEP)["critical"] == ["H"]
 
 
@@ -59,5 +62,7 @@ def test_notifications_only_on_entry_even_as_time_or_deadline_changes():
     assert [event[:2] for event in first] == [("H", "critical")]
     assert not list(transitions(items, items, now=DEADLINE + STEP, previous_now=threshold))
     extended = incidents(stateEnum="WorkInProgress", deadline=(DEADLINE + timedelta(hours=4)).isoformat())
+    groups = classify(extended, DEADLINE)
+    assert groups["critical"] == [] and groups["high"] == ["H"]
     assert not list(transitions(items, extended, now=DEADLINE, previous_now=threshold))
     assert [event[:2] for event in transitions(extended, items, now=DEADLINE)] == [("H", "critical")]

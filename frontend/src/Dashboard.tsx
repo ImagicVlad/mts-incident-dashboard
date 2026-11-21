@@ -27,12 +27,13 @@ export function Pill({item,label}:{item:Incident;label?:string}) {
   const source = item.state || item.stateEnum || 'Статус не указан';
   return <span className={'pill '+tone} title={label && label!==source ? source : undefined}>{label ?? source}</span>;
 }
-function Card({item,group,now,animate,critical}:{item:Incident;group:GroupId;now:number;animate:boolean;critical:boolean}) {
+type PriorityQueue = 'high' | 'critical';
+function Card({item,group,now,animate,priority}:{item:Incident;group:GroupId;now:number;animate:boolean;priority?:PriorityQueue}) {
   const {formats:{stamp}} = useLive();
   const reduced = useReducedMotion();
   const countdown = active(item) ? remaining(item.deadline,now) : null;
   return <motion.div initial={animate && !reduced ? {opacity:0,y:6} : false} animate={{opacity:1,y:0}} transition={{duration:reduced?0:0.24}}>
-    <Link data-incident-id={item.id} to={pathFor(item.id)} className={'incident'+ (critical?' urgent':'') + (group==='history'?' resolved':'')}>
+    <Link data-incident-id={item.id} data-priority={priority} to={pathFor(item.id)} className={group==='history'?'incident resolved':'incident'}>
       <div className="card-top"><span className="mono">{item.id}</span><span className="product">{item.productName || 'Продукт не указан'}</span><Pill item={item} label={overviewStatus(item)}/></div>
       <h3>{item.header || 'Без заголовка'}</h3>
       {group === 'critical' && <p className="critical-reason">{item.priorityId === 4
@@ -52,6 +53,10 @@ export function Dashboard() {
   useEffect(()=>{document.title='Дашборд инцидентов · МТС';},[]);
   if (!snapshot?.hasSnapshot) return <main className="container waiting"><h1>Дашборд инцидентов</h1><p role="status">{bootstrapError || snapshot?.sourceStatus==='error' ? 'Данные недоступны' : 'Загружаем инциденты…'}</p></main>;
   const byId = new Map(snapshot.incidents.map(i=>[i.id,i]));
+  const priorityById = new Map<string, PriorityQueue>();
+  for (const queue of ['high', 'critical'] as const) {
+    for (const id of snapshot.groups[queue]) priorityById.set(id, queue);
+  }
   const entries = snapshot.incidents.filter(i=>active(i) && i.deadline && Number.isFinite(Date.parse(i.deadline))).sort((a,b)=>Date.parse(a.deadline!)-Date.parse(b.deadline!));
   const nearest = entries.find(i=>Date.parse(i.deadline!)>=now) ?? entries.at(-1);
   const nextClock = nearest && remaining(nearest.deadline,now);
@@ -63,7 +68,7 @@ export function Dashboard() {
         <span className="category-name">{name}</span><span className="count">{ids.length}</span><ChevronDown size={16}/></button></h2>
       <div id={'list-'+id} className="incident-list">{shown.map(key=>{
         const item=byId.get(key);
-        return item && <Card key={key} item={item} group={id} critical={snapshot.groups.critical.includes(key)} now={now} animate={newCards.has(id+'/'+key)}/>;
+        return item && <Card key={key} item={item} group={id} priority={priorityById.get(key)} now={now} animate={newCards.has(id+'/'+key)}/>;
       })}
       {!ids.length && <p className="queue-empty">{id==='history'?'Завершённых инцидентов пока нет.':'В этой категории нет инцидентов.'}</p>}</div>
     </section>;

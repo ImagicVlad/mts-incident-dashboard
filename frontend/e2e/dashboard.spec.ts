@@ -68,7 +68,7 @@ test('две вкладки получают изменения, пережив�
   } finally { await replace(initial); }
 });
 
-test('высокий приоритет появляется в критических по часам сервера', async ({page}) => {
+test('инцидент меняет очередь при достижении порога и переносе срока', async ({page}) => {
   const initial = await readFile(file, 'utf8');
   const data = JSON.parse(initial);
   const issue = data.find((row: {priorityId:number; stateEnum:string}) =>
@@ -78,6 +78,13 @@ test('высокий приоритет появляется в критичес
     await page.getByRole('button', {name:'Войти', exact:true}).click();
     const critical = page.getByTestId('group-critical');
     await expect(critical).toBeVisible();
+    const high = page.getByTestId('group-high');
+    await high.getByRole('button').click();
+    const selector = `[data-incident-id="${issue.id}"]`;
+    const highCard = high.locator(selector);
+    const criticalCard = critical.locator(selector);
+    const highCount = page.locator('.metric[href="#high"] strong');
+    const criticalCount = page.locator('.metric[href="#critical"] strong');
 
     // The final quarter of this 160-second interval starts six seconds from now.
     const now = Date.now();
@@ -85,13 +92,24 @@ test('высокий приоритет появляется в критичес
     issue.deadline = new Date(now + 46_000).toISOString();
     issue.header = 'Проверка окна срочности';
     await replace(JSON.stringify(data));
-    await expect(page.getByTestId('group-high').getByText(issue.header)).toBeVisible();
-    const card = critical.locator(`[data-incident-id="${issue.id}"]`);
-    await expect(card).toHaveCount(0);
-    await expect(card).toContainText('Высокий приоритет · срок близко', {timeout:15_000});
+    await expect(highCard).toContainText(issue.header);
+    await expect(highCard).toHaveAttribute('data-priority','high');
+    await expect(criticalCard).toHaveCount(0);
+    await expect(highCount).toHaveText('03');
+    await expect(criticalCard).toContainText('Высокий приоритет · срок близко', {timeout:15_000});
+    await expect(criticalCard).toHaveAttribute('data-priority','critical');
+    await expect(highCard).toHaveCount(0);
+    await expect(highCount).toHaveText('02');
+    await expect(criticalCount).toHaveText('02');
 
     await page.getByRole('button', {name:/Оповещения/}).click();
     await expect(page.locator('.notifications-panel .result-link').filter({hasText:issue.id})).toHaveCount(1);
-    await expect(page.getByTestId('group-high').getByText(issue.header)).toBeVisible();
+    await page.keyboard.press('Escape');
+    issue.deadline = new Date(now + 4 * 3_600_000).toISOString();
+    await replace(JSON.stringify(data));
+    await expect(highCard).toHaveAttribute('data-priority','high');
+    await expect(criticalCard).toHaveCount(0);
+    await expect(highCount).toHaveText('03');
+    await expect(criticalCount).toHaveText('01');
   } finally { await replace(initial); }
 });
