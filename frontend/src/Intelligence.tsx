@@ -3,6 +3,7 @@ import { ArrowUp, RotateCw, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { api, errorText, pathFor, type Answer, type SummaryAnswer, type Message, type Incident } from './api';
 import { useLive } from './live';
+import { ChatWindow } from './ChatWindow';
 
 function AnswerText({text}:{text:string}) {
   const {snapshot} = useLive();
@@ -33,7 +34,17 @@ export function Chat() {
   const input = useRef<HTMLInputElement>(null);
   const abort = useRef<AbortController | null>(null);
   useEffect(()=>()=>abort.current?.abort(),[]);
-  useEffect(()=>{if(history.current)history.current.scrollTop=history.current.scrollHeight;},[messages,pending,error]);
+  useEffect(() => {
+    const log = history.current;
+    if (!log) return;
+    if (log.clientHeight) { log.scrollTop = log.scrollHeight; return; }
+    // A reply can arrive while the window is minimized.
+    const onRestore = new ResizeObserver(() => {
+      if (log.clientHeight) { log.scrollTop = log.scrollHeight; onRestore.disconnect(); }
+    });
+    onRestore.observe(log);
+    return () => onRestore.disconnect();
+  }, [messages,pending,error]);
   async function submit() {
     const text = draft.trim();
     if (!text || pending || configured===false) return;
@@ -48,7 +59,7 @@ export function Chat() {
       if (!controller.signal.aborted) {setMessages(previous);setError(errorText(err));setDraft(text);}
     } finally {setPending(false);}
   }
-  return <section className="incident-chat" aria-labelledby="chat-title"><h2 id="chat-title"><span><Sparkles size={17}/></span> ИИ-чат</h2>
+  return <ChatWindow>
     <div className="chat-log" role="log" aria-label="Переписка по инцидентам" ref={history}>
       <div className="chat-message"><strong>Ассистент</strong><p>{configured===false?'ИИ не настроен. Для чата требуется подключение провайдера на сервере.':'Что проверить по смене? Могу подсказать сроки инцидентов и назначенные команды.'}</p></div>
       {!messages.length && configured!==false && <div className="chat-suggestions">{['У какого инцидента ближайший срок?','Какие инциденты на координаторах?'].map(s=><button key={s} onClick={()=>{setDraft(s);input.current?.focus();}}>{s}</button>)}</div>}
@@ -59,7 +70,7 @@ export function Chat() {
     {error && <p className="chat-error" role="alert">{error} <button className="text-action" onClick={submit}>Повторить</button></p>}
     <form className="chat-form" onSubmit={e=>{e.preventDefault();void submit();}}><input ref={input} aria-label="Вопрос об инцидентах" placeholder="Спросить об инцидентах…" maxLength={2000} value={draft} onChange={e=>setDraft(e.target.value)} disabled={pending || configured===false}/>
       <button type="submit" aria-label="Отправить сообщение" disabled={pending || configured===false || !draft.trim()}><ArrowUp size={18}/></button></form>
-  </section>;
+  </ChatWindow>;
 }
 
 export function Summary({item}:{item:Incident}) {
