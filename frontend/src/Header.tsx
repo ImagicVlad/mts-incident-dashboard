@@ -16,10 +16,12 @@ export function Header({user}: {user:Account}) {
     [i.header,i.productName,i.id,i.assignedGroupName,i.assignedEmployee,i.sysId].some(s=>s?.toLowerCase().includes(term))) : [];
   const events = snapshot?.notifications ?? [];
   return <header className="topbar dashboard-bar"><div className="bar-inner dashboard-nav">
-    <Link className="mts-mark" to="/dashboard" aria-label="МТС — на дашборд"><img src="/mts-logo.svg" width="40" height="40" alt="МТС"/></Link>
+    <Link className="mts-mark" to="/dashboard" aria-label="МТС — на дашборд">
+      <img src="/mts-logo.svg" width="40" height="40" alt=""/><span>МТС</span>
+    </Link>
     <form className="incident-search" role="search" onSubmit={e=>{e.preventDefault(); if(found[0]) {setQuery(''); navigate(pathFor(found[0].id));}}}>
       <Search aria-hidden="true" size={19}/><input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Escape')setQuery('');}}
-        aria-label="Поиск инцидентов" type="search" placeholder="поиск инцидентов..." autoComplete="off"/>
+        aria-label="Поиск инцидентов" type="search" placeholder="Поиск инцидентов…" autoComplete="off"/>
       {term && <div className="search-results">{found.map(i=><Link className="result-link" key={i.id} to={pathFor(i.id)} onClick={()=>setQuery('')}>
         <span className="result-meta">{i.id} · {i.productName || 'Продукт не указан'}</span><strong>{i.header || 'Без заголовка'}</strong></Link>)}
         {!found.length && <p className="empty-result" role="status">Инциденты не найдены</p>}</div>}

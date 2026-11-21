@@ -1,6 +1,6 @@
 """Normalization of mentor exports and the independent coordinator queues."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from string import Formatter
 from typing import Annotated, Any, Literal
 from urllib.parse import quote, urlsplit
@@ -14,6 +14,7 @@ HISTORY = frozenset({"Resolved", "Closed"})
 COORDINATOR_STATES = OPEN | {"Research"}
 CRITICAL_PRIORITY = 4
 HIGH_PRIORITY = 3
+MAX_CRITICAL_LEAD = timedelta(hours=1)
 STATE_CODES = {0: "Assigned", 2: "WorkInProgress", 7: "Resolved", 10: "Closed", 20: "Research"}
 STATE_LABELS = {
     "Assigned": "Назначен", "WorkInProgress": "Выполняется", "Resolved": "Завершен",
@@ -198,13 +199,29 @@ def normalize_records(rows: Any, template: str = "") -> dict[str, Incident]:
     return records
 
 
-def memberships(item: Incident) -> set[str]:
+def critical_from(item: Incident) -> datetime | None:
+    """Time when an active high-priority incident joins the critical queue."""
+    if item.stateEnum not in OPEN or item.priorityId != HIGH_PRIORITY or not item.deadline:
+        return None
+    deadline = datetime.fromisoformat(item.deadline)
+    if not item.submitDate:
+        return deadline
+    start = datetime.fromisoformat(item.submitDate)
+    if start >= deadline:
+        return deadline
+    return deadline - min((deadline - start) / 4, MAX_CRITICAL_LEAD)
+
+
+def memberships(item: Incident, now: datetime | None = None) -> set[str]:
     groups = set()
     if item.stateEnum in OPEN:
         if item.priorityId == CRITICAL_PRIORITY:
             groups.add("critical")
         if item.priorityId == HIGH_PRIORITY:
             groups.add("high")
+            threshold = critical_from(item)
+            if threshold is not None and (now or datetime.now(UTC)) >= threshold:
+                groups.add("critical")
     if item.stateEnum in COORDINATOR_STATES and item.assignedGroupName == COORDINATORS:
         groups.add("assigned")
     if item.stateEnum == "Research":
@@ -214,10 +231,11 @@ def memberships(item: Incident) -> set[str]:
     return groups
 
 
-def classify(items: dict[str, Incident]) -> dict[str, list[str]]:
+def classify(items: dict[str, Incident], now: datetime | None = None) -> dict[str, list[str]]:
+    now = now or datetime.now(UTC)
     groups = {key: [] for key in GROUPS}
     for item in items.values():
-        for group in memberships(item):
+        for group in memberships(item, now):
             groups[group].append(item.id)
     for key, ids in groups.items():
         # Nulls last, then deterministic ordering even when deadlines match.
@@ -229,10 +247,13 @@ def classify(items: dict[str, Incident]) -> dict[str, list[str]]:
     return groups
 
 
-def transitions(before: dict[str, Incident], after: dict[str, Incident]):
+def transitions(before: dict[str, Incident], after: dict[str, Incident],
+                now: datetime | None = None, previous_now: datetime | None = None):
+    now = now or datetime.now(UTC)
+    previous_now = previous_now or now
     for id_, item in sorted(after.items()):
-        previous = memberships(before[id_]) if id_ in before else set()
-        current = memberships(item)
+        previous = memberships(before[id_], previous_now) if id_ in before else set()
+        current = memberships(item, now)
         if "critical" in current - previous:
             yield id_, "critical", "Новый критический инцидент"
         if "assigned" in current - previous:

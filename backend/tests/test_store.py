@@ -1,5 +1,6 @@
 import asyncio
 import json
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -213,3 +214,43 @@ def test_watch_recovers_when_source_directory_appears_after_start(tmp_path):
             await store.stop()
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("broken_source", [False, True])
+async def test_clock_escalates_once_on_last_valid_snapshot(tmp_path, monkeypatch, broken_source):
+    clock = datetime(2030, 1, 1, 12, tzinfo=UTC)
+    monkeypatch.setattr("app.store.utc_now", lambda: clock)
+    source = tmp_path / "incidents.json"
+    data = [row("H", priorityId=3, submitDate=clock.isoformat(),
+                deadline=(clock + timedelta(hours=4)).isoformat())]
+    save(source, data)
+    store = Store(source, demo=True, polling=True)
+    await store.start()
+    updates = store.subscribe()
+    try:
+        initial = await anext(updates)
+        assert initial["groups"]["high"] == ["H"] and initial["groups"]["critical"] == []
+        previous = initial
+        if broken_source:
+            source.write_text("[", encoding="utf-8")
+            previous = await asyncio.wait_for(anext(updates), 6)
+            assert previous["sourceStatus"] == "error"
+
+        clock += timedelta(hours=3)
+        escalated = await asyncio.wait_for(anext(updates), 6)
+        assert escalated["groups"]["critical"] == escalated["groups"]["high"] == ["H"]
+        assert escalated["snapshotVersion"] == previous["snapshotVersion"] + 1
+        assert escalated["loadedAt"] == escalated["dataUpdatedAt"] == initial["loadedAt"]
+        assert escalated["sourceStatus"] == previous["sourceStatus"]
+        assert [(n["incidentId"], n["kind"]) for n in escalated["notifications"]] == [("H", "critical")]
+
+        clock += timedelta(hours=1)
+        save(source, data)
+        await store.reload()
+        restored = store.snapshot()
+        assert restored["sourceStatus"] == "ok"
+        assert restored["snapshotVersion"] == escalated["snapshotVersion"] + int(broken_source)
+        assert restored["notifications"] == escalated["notifications"]
+    finally:
+        await updates.aclose()
+        await store.stop()

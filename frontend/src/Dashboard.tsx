@@ -12,9 +12,20 @@ const sections = [
   {id:'high',name:'Высокий приоритет',note:'Повышенное внимание',tone:'amber'},
   {id:'review',name:'Исследование',note:'Разбор причин',tone:'violet'},
 ] as const;
-export function Pill({item}:{item:Incident}) {
+function overviewStatus(item: Incident) {
+  switch (item.stateEnum) {
+    case 'Assigned': return 'Назначен';
+    case 'WorkInProgress': return 'В работе';
+    case 'Research': return 'Исследование';
+    case 'Resolved':
+    case 'Closed': return 'Решён';
+    default: return item.state || item.stateEnum || 'Статус не указан';
+  }
+}
+export function Pill({item,label}:{item:Incident;label?:string}) {
   const tone = finished(item) ? 'done' : item.stateEnum==='Research' ? 'research' : 'active';
-  return <span className={'pill '+tone}>{item.state || item.stateEnum || 'Статус не указан'}</span>;
+  const source = item.state || item.stateEnum || 'Статус не указан';
+  return <span className={'pill '+tone} title={label && label!==source ? source : undefined}>{label ?? source}</span>;
 }
 function Card({item,group,now,animate,critical}:{item:Incident;group:GroupId;now:number;animate:boolean;critical:boolean}) {
   const {formats:{stamp}} = useLive();
@@ -22,8 +33,11 @@ function Card({item,group,now,animate,critical}:{item:Incident;group:GroupId;now
   const countdown = active(item) ? remaining(item.deadline,now) : null;
   return <motion.div initial={animate && !reduced ? {opacity:0,y:6} : false} animate={{opacity:1,y:0}} transition={{duration:reduced?0:0.24}}>
     <Link data-incident-id={item.id} to={pathFor(item.id)} className={'incident'+ (critical?' urgent':'') + (group==='history'?' resolved':'')}>
-      <div className="card-top"><span className="mono">{item.id}</span><span className="product">{item.productName || 'Продукт не указан'}</span><Pill item={item}/></div>
+      <div className="card-top"><span className="mono">{item.id}</span><span className="product">{item.productName || 'Продукт не указан'}</span><Pill item={item} label={overviewStatus(item)}/></div>
       <h3>{item.header || 'Без заголовка'}</h3>
+      {group === 'critical' && <p className="critical-reason">{item.priorityId === 4
+        ? 'Наивысший приоритет'
+        : 'Высокий приоритет · ' + (countdown?.overdue ? 'срок истёк' : 'срок близко')}</p>}
       <div className="card-foot"><span>Начало <b>{stamp(item.submitDate)}</b></span><span>Команда <b className={item.assignedGroupName?'':'team-pending'} title={item.assignedGroupName || 'Команда не указана'}>{item.assignedGroupName || '?'}</b></span><span>Исполнитель <b>{item.assignedEmployee || 'Не указан'}</b></span>
         <span>{item.stateEnum==='Research'?'Срок из источника':'Срок'} <b>{stamp(item.deadline)}</b></span>
         {countdown && <strong className={'time-left'+(countdown.overdue?' overdue':'')}>{countdown.text}</strong>}

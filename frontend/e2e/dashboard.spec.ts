@@ -20,6 +20,12 @@ test('две вкладки получают изменения, пережив�
     await expect(high.locator('[data-incident-id]')).toHaveCount(2);
     await high.getByRole('button').click();
     await expect(high.locator('[data-incident-id]')).toHaveCount(3);
+    const history = page.getByTestId('group-history');
+    await history.getByRole('button').click();
+    for (const record of data.filter(row => row.stateEnum === 'Resolved' || row.stateEnum === 'Closed')) {
+      await expect(history.locator(`[data-incident-id="${record.id}"] .pill`)).toHaveText('Решён');
+    }
+    await history.getByRole('button').click();
     await expect(page.getByText('ИИ не настроен', {exact:false}).first()).toBeVisible();
     const tab = await context.newPage();
     await tab.goto('/routes/itsm/incident/#' + issue.id);
@@ -45,7 +51,8 @@ test('две вкладки получают изменения, пережив�
     issue.priority='Средний'; issue.completionDate=new Date().toISOString();
     await replace(JSON.stringify(data));
     await expect(critical.locator('[data-incident-id]')).toHaveCount(0);
-    await expect(page.getByTestId('group-history')).toContainText(String(issue.id));
+    await expect(history.locator(`[data-incident-id="${issue.id}"] .pill`)).toHaveText('Решён');
+    await expect(tab.locator('.record-label .pill')).toHaveText('Завершен');
     await replace('[{');
     await expect.poll(async () => (await (await context.request.get('/api/incidents')).json()).sourceStatus).toBe('error');
     await expect(tab.getByRole('heading',{name:String(issue.header),exact:true})).toBeVisible();
@@ -58,5 +65,33 @@ test('две вкладки получают изменения, пережив�
     await page.getByRole('button',{name:'Выйти из аккаунта'}).click();
     await expect(page).toHaveURL(/\/login$/);
     expect((await context.request.get('/api/incidents')).status()).toBe(401);
+  } finally { await replace(initial); }
+});
+
+test('высокий приоритет появляется в критических по часам сервера', async ({page}) => {
+  const initial = await readFile(file, 'utf8');
+  const data = JSON.parse(initial);
+  const issue = data.find((row: {priorityId:number; stateEnum:string}) =>
+    row.priorityId === 3 && row.stateEnum === 'WorkInProgress');
+  try {
+    await page.goto('/login');
+    await page.getByRole('button', {name:'Войти', exact:true}).click();
+    const critical = page.getByTestId('group-critical');
+    await expect(critical).toBeVisible();
+
+    // The final quarter of this 160-second interval starts six seconds from now.
+    const now = Date.now();
+    issue.submitDate = new Date(now - 114_000).toISOString();
+    issue.deadline = new Date(now + 46_000).toISOString();
+    issue.header = 'Проверка окна срочности';
+    await replace(JSON.stringify(data));
+    await expect(page.getByTestId('group-high').getByText(issue.header)).toBeVisible();
+    const card = critical.locator(`[data-incident-id="${issue.id}"]`);
+    await expect(card).toHaveCount(0);
+    await expect(card).toContainText('Высокий приоритет · срок близко', {timeout:15_000});
+
+    await page.getByRole('button', {name:/Оповещения/}).click();
+    await expect(page.locator('.notifications-panel .result-link').filter({hasText:issue.id})).toHaveCount(1);
+    await expect(page.getByTestId('group-high').getByText(issue.header)).toBeVisible();
   } finally { await replace(initial); }
 });

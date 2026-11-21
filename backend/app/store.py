@@ -11,11 +11,11 @@ from uuid import uuid4
 
 from watchfiles import awatch
 
-from .domain import Incident, classify, normalize_records, transitions, utc_string
+from .domain import Incident, classify, critical_from, normalize_records, transitions, utc_string
 
 
-def now() -> str:
-    return utc_string(datetime.now(UTC))
+def utc_now() -> datetime:
+    return datetime.now(UTC)
 
 
 def signature(stat: os.stat_result) -> tuple[int, int, int, int]:
@@ -32,6 +32,8 @@ class Store:
         self._version = 0
         self._items: dict[str, Incident] = {}
         self._groups = classify({})
+        self._classified_at: datetime | None = None
+        self._next_escalation: datetime | None = None
         self._rows: list[dict] = []
         self._diagnostics: list[str] = []
         self._events: deque[dict] = deque(maxlen=100)
@@ -48,7 +50,7 @@ class Store:
         return {
             "epoch": self.epoch,
             "snapshotVersion": self._version,
-            "serverTime": now(),
+            "serverTime": utc_string(utc_now()),
             "loadedAt": self._loaded_at,
             "dataUpdatedAt": self._updated_at,
             "sourceStatus": "error" if self._error else "ok",
@@ -109,22 +111,36 @@ class Store:
                 self._error = error
                 self._publish()
 
+    def _regroup(self, items: dict[str, Incident], at: datetime) -> None:
+        if self._classified_at is not None:
+            events = transitions(self._items, items, now=at, previous_now=self._classified_at)
+            for index, (id_, kind, label) in enumerate(events):
+                self._events.appendleft({
+                    "eventId": f"{self.epoch}-{self._version + 1}-{index}",
+                    "incidentId": id_, "kind": kind, "label": label, "time": utc_string(at),
+                })
+        self._groups = classify(items, now=at)
+        thresholds = (critical_from(item) for item in items.values())
+        self._next_escalation = min((time for time in thresholds if time and time > at), default=None)
+        self._classified_at = at
+
+    def _refresh_clock(self) -> None:
+        at = utc_now()
+        if self._next_escalation is not None and at >= self._next_escalation:
+            self._regroup(self._items, at)
+            self._publish()
+
     def _accept(self, items: dict[str, Incident]) -> None:
         initial = self._loaded_at is None
         changed = initial or self._items != items
         recovery = self._error is not None
         if not (changed or recovery):
             return
-        time = now()
+        at = utc_now()
+        time = utc_string(at)
+        self._regroup(items, at)
         if changed:
-            if not initial:
-                for index, (id_, kind, label) in enumerate(transitions(self._items, items)):
-                    self._events.appendleft({
-                        "eventId": f"{self.epoch}-{self._version + 1}-{index}",
-                        "incidentId": id_, "kind": kind, "label": label, "time": time,
-                    })
             self._items = items
-            self._groups = classify(items)
             self._rows = [items[key].model_dump(mode="json") for key in sorted(items)]
             self._diagnostics = [f"{row['id']}: {note}" for row in self._rows for note in row["diagnostics"]]
             self._updated_at = time
@@ -151,9 +167,11 @@ class Store:
                     # Also covers the gap between initial read and watcher registration.
                     if relevant or self._file_signature() != self._signature or self._error:
                         await self.reload()
+                    self._refresh_clock()
             except (OSError, RuntimeError):
                 # Retry the parent as well, e.g. when a mount only appears after startup.
                 await self.reload()
+                self._refresh_clock()
                 try:
                     await asyncio.wait_for(self._stopping.wait(), timeout=1)
                 except TimeoutError:
