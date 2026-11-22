@@ -101,7 +101,7 @@ type PickerProps<T extends string> = {
   options:{value:T;label:string;action?:boolean}[];
   onSelect:(value:T)=>void;
 };
-function FilterPicker<T extends string>({id,name,listName=name,selected,display,options,onSelect}:PickerProps<T>) {
+export function FilterPicker<T extends string>({id,name,listName=name,selected,display,options,onSelect}:PickerProps<T>) {
   const [open,setOpen]=useState(false);
   const trigger=useRef<HTMLButtonElement>(null);
   const menu=useRef<HTMLDivElement>(null);
@@ -131,7 +131,11 @@ function FilterPicker<T extends string>({id,name,listName=name,selected,display,
         <span id={valueId}>{display}</span><ChevronDown size={15} aria-hidden="true"/>
       </button></PopoverTrigger>
       <PopoverContent ref={menu} role="listbox" aria-label={listName} className="sort-picker-menu" sideOffset={5}
-        onOpenAutoFocus={e=>{e.preventDefault();menu.current?.querySelector<HTMLButtonElement>('[aria-selected="true"]')?.focus();}}
+        onOpenAutoFocus={e=>{
+          e.preventDefault();
+          const first=menu.current?.querySelector<HTMLButtonElement>('[aria-selected="true"]') ?? menu.current?.querySelector<HTMLButtonElement>('[role="option"]');
+          first?.focus();
+        }}
         onKeyDown={navigate}>
         {options.map(option=><button key={option.value} type="button" role="option" tabIndex={-1} className="sort-picker-option" data-action={option.action}
           aria-selected={selected===option.value} onClick={()=>{onSelect(option.value);setOpen(false);}}>

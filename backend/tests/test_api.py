@@ -51,6 +51,7 @@ def test_assignment_persists_and_validates_team(source, monkeypatch):
         assert client.post(url, json=body).status_code == 401
         sign_in(client)
         assert client.post(url, json={**body, "employee":"Wrong"}).status_code == 409
+        assert client.post(url, json={**body, "team":COORDINATORS, "employee":None}).status_code == 409
         assert client.post(url, json=body).json()["assignedEmployee"] == "Operator"
         assert client.post(url, json=body).status_code == 409
     with TestClient(create_app(settings(source))) as client:

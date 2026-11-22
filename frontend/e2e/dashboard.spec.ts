@@ -385,10 +385,15 @@ test('команда координаторов и стадия исследов
 
     await replace(JSON.stringify([issue, {id:'TEAM-EXAMPLE', stateEnum:'Closed',
       assignedGroupName:'Платёжные сервисы', assignedEmployee:'Дежурный инженер'}]));
-    await detail.getByRole('button', {name:'Изменить назначение'}).click();
-    await detail.getByLabel('Команда', {exact:true}).selectOption('Платёжные сервисы');
-    await detail.getByLabel('Исполнитель', {exact:true}).selectOption('Дежурный инженер');
-    await detail.getByRole('button', {name:'Сохранить', exact:true}).click();
+    await expect(detail.locator('.facts')).toContainText('Ещё не назначена');
+    await detail.locator('.paper footer').getByRole('button', {name:'Назначить команду'}).click();
+    await expect(detail.getByRole('button', {name:'Передать команде'})).toBeDisabled();
+    await detail.getByRole('button', {name:'Профильная команда', exact:true}).click();
+    await expect(detail.getByRole('option', {name:issue.assignedGroupName!})).toHaveCount(0);
+    await detail.getByRole('option', {name:'Платёжные сервисы'}).click();
+    await detail.getByRole('button', {name:'Исполнитель', exact:true}).click();
+    await detail.getByRole('option', {name:'Дежурный инженер'}).click();
+    await detail.getByRole('button', {name:'Передать команде', exact:true}).click();
     await expect(research).toContainText('Платёжные сервисы');
     await detail.reload();
     await expect(detail.locator('.facts dd').filter({hasText:'Дежурный инженер'})).toBeVisible();

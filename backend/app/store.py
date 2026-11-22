@@ -122,13 +122,13 @@ class Store:
             item = items.get(id_)
             if not item or "assigned" not in memberships(item) or (item.assignedEmployee, item.lastAssignmentToTeamDateTime) != (expected_employee, expected_time):
                 raise AssignmentConflict("Назначение уже изменилось. Проверьте карточку.")
+            if team == item.assignedGroupName:
+                raise AssignmentConflict("Выберите профильную команду для передачи.")
             if not any(row.assignedGroupName == team and (employee is None or row.assignedEmployee == employee)
                        for row in items.values()):
                 raise AssignmentConflict("Проверьте команду и исполнителя.")
-            if team == item.assignedGroupName and employee == item.assignedEmployee:
-                return item
             changes = dict(assignedGroupName=team, assignedEmployee=employee,
-                           lastAssignmentToTeamDateTime=utc_string(utc_now()) if team != item.assignedGroupName else expected_time)
+                           lastAssignmentToTeamDateTime=utc_string(utc_now()))
             saved[id_] = {"source": saved.get(id_, {}).get("source", self._assignment_key(item)), "changes": changes}
             await asyncio.to_thread(atomic_write, self.assignments_file, json.dumps(saved, ensure_ascii=False))
             items[id_] = item.model_copy(update=changes)
