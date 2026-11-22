@@ -123,12 +123,30 @@ test('карта связей открывается отдельно, масш�
   await expect.poll(async()=>(await map.boundingBox())!.width).toBeLessThan(initial.width);
   await expect(map.locator('[data-incident-id="LAB-12"]')).toHaveCount(0);
   const node=map.locator('[data-incident-id="LAB-2"]');
+  await expect(node.locator('.graph-card-id')).toBeVisible();
+  await expect(node.locator('.graph-card-id')).toHaveText('LAB-2');
+  await expect(node.locator('.graph-card-title')).toBeVisible();
+  await expect(node.locator('.graph-card-title')).toContainText('Проверка');
   const canvas=(await map.locator('.graph-stage > svg').boundingBox())!;
   const originalPosition=await node.getAttribute('transform');
   await page.mouse.move(canvas.x+12,canvas.y+12);await page.mouse.down();
   await page.mouse.move(canvas.x+36,canvas.y+28,{steps:4});await page.mouse.up();
   await expect(node).not.toHaveAttribute('transform',originalPosition!);
-  await node.locator('.graph-dot').click();
+  const card=node.locator('.graph-card-body');
+  const tooltip=map.getByRole('tooltip');
+  await card.hover();
+  await expect(tooltip).toContainText('Назначен координаторам');
+  await expect(tooltip).toContainText(coord);
+  await expect(tooltip).toContainText(displayFormats().time(records[0].deadline));
+  const tip=(await tooltip.boundingBox())!, anchor=(await card.boundingBox())!;
+  if (anchor.y-canvas.y>tip.height+16) expect(tip.y+tip.height).toBeLessThanOrEqual(anchor.y+1);
+  await control('Приблизить').hover();
+  await expect(tooltip).toBeHidden();
+  await node.focus();
+  await expect(tooltip).toBeVisible();
+  await node.press('Escape');
+  await expect(tooltip).toBeHidden();
+  await card.click();
   await expect(map.locator('.graph-inspector')).toContainText('LAB-2');
   const scale=map.locator('.graph-scale');
   await control('Вписать карту').click();
@@ -156,31 +174,40 @@ test('карта связей открывается отдельно, масш�
   await expect(map).toHaveCount(0);
 });
 
-test('поиск на мобильной карте видит обновления смены и открывает карточку',async({page,records})=>{
-  await page.setViewportSize({width:390,height:844});
-  await login(page);
-  const panel=await open(page);
-  await panel.getByRole('button',{name:'Расширенные',exact:true}).click();
-  await panel.getByRole('button',{name:'Карта связей',exact:true}).click();
-  const map=page.getByRole('dialog',{name:'Карта связей',exact:true});
-  await expect.poll(()=>map.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
-  const search=map.getByRole('searchbox',{name:'Поиск на карте'});
-  await search.fill('Потеря пакетов');
-  const result=map.locator('.graph-results').getByRole('button',{name:/LAB-21/});
-  await expect(result).toHaveCount(0);
-  const sibling={...records.find(item=>item.id==='LAB-20')!,id:'LAB-21',sysId:'lab-21',header:'Потеря пакетов'};
-  await publish(JSON.stringify([...records,sibling]));
-  await expect(result).toBeVisible();
-  await search.press('Enter');
-  await expect(map.locator('.graph-inspector')).toContainText('LAB-21');
-  await map.getByRole('link',{name:'Открыть инцидент'}).click();
-  await expect(page).toHaveURL(/\/incidents\/LAB-21$/);
-  await expect(page.getByRole('heading',{name:'Потеря пакетов',exact:true})).toBeVisible();
-  await expect(map).toHaveAttribute('data-mode','minimized');
-  await map.getByRole('button',{name:'Восстановить карту'}).click();
-  await expect(map.locator('.graph-inspector')).toContainText('LAB-21');
-  await map.getByRole('button',{name:'Закрыть карту'}).click();
-  await expect(map).toHaveCount(0);
+test.describe('Карта на телефоне',()=>{
+  test.use({hasTouch:true});
+  test('поиск на мобильной карте видит обновления смены и открывает карточку',async({page,records})=>{
+    await page.setViewportSize({width:390,height:844});
+    await login(page);
+    const panel=await open(page);
+    await panel.getByRole('button',{name:'Расширенные',exact:true}).click();
+    await panel.getByRole('button',{name:'Карта связей',exact:true}).click();
+    const map=page.getByRole('dialog',{name:'Карта связей',exact:true});
+    await expect.poll(()=>map.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
+    const search=map.getByRole('searchbox',{name:'Поиск на карте'});
+    await search.fill('Потеря пакетов');
+    const result=map.locator('.graph-results').getByRole('button',{name:/LAB-21/});
+    await expect(result).toHaveCount(0);
+    const sibling={...records.find(item=>item.id==='LAB-20')!,id:'LAB-21',sysId:'lab-21',header:'Потеря пакетов',
+      deadline:records[0].deadline};
+    await publish(JSON.stringify([...records,sibling]));
+    await expect(result).toBeVisible();
+    await search.press('Enter');
+    await expect(map.locator('.graph-inspector')).toContainText('LAB-21');
+    await map.locator('[data-incident-id="LAB-21"] .graph-card-body').tap();
+    const tip=map.getByRole('tooltip');
+    await expect(tip).toContainText('Назначен команде');
+    await expect(tip).toContainText(sibling.assignedGroupName!);
+    await expect(tip).toContainText(displayFormats().time(sibling.deadline));
+    await map.getByRole('link',{name:'Открыть инцидент'}).click();
+    await expect(page).toHaveURL(/\/incidents\/LAB-21$/);
+    await expect(page.getByRole('heading',{name:'Потеря пакетов',exact:true})).toBeVisible();
+    await expect(map).toHaveAttribute('data-mode','minimized');
+    await map.getByRole('button',{name:'Восстановить карту'}).click();
+    await expect(map.locator('.graph-inspector')).toContainText('LAB-21');
+    await map.getByRole('button',{name:'Закрыть карту'}).click();
+    await expect(map).toHaveCount(0);
+  });
 });
 
 test('расширенные фильтры работают с поиском, условия и сортировка восстанавливаются после перезагрузки',async({page,records})=>{

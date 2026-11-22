@@ -2,16 +2,39 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type Poin
 import { ArrowUpRight, Crosshair, Diamond, Minus, Plus, Search, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { pathFor, type Incident } from '../api';
+import { IncidentTooltip } from './IncidentTooltip';
 import './graph.css';
 
 type Point = {x: number; y: number};
 type Camera = Point & {zoom: number};
 type Node = Point & {item: Incident; product: string; service: string};
-type Cluster = Point & {name: string; key: string; radius: number; tone: number; nodes: Node[]};
+type Cluster = Point & {name: string; key: string; width: number; height: number; tone: number; nodes: Node[]};
 const normalize = (text?: string | null) => (text ?? '').trim().toLocaleLowerCase('ru');
 const collator = new Intl.Collator('ru', {numeric:true});
 const clamp = (number: number, low: number, high: number) => Math.min(high, Math.max(low, number));
-const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+const CARD_WIDTH = 106;
+const CARD_HEIGHT = 42;
+const CARD_GAP = 10;
+
+function caption(text: string) {
+  const words = text.trim().split(/\s+/);
+  const lines: string[] = [];
+  let line = '';
+  for (const word of words) {
+    if (line && line.length + word.length + 1 > 18) {
+      lines.push(line);
+      line = '';
+      if (lines.length === 2) break;
+    }
+    const part = word.length > 18 ? word.slice(0,17) + '…' : word;
+    line = line ? line + ' ' + part : part;
+  }
+  if (line && lines.length < 2) lines.push(line);
+  if (lines.length === 2 && lines.join(' ').length < text.trim().length) {
+    lines[1] = lines[1].slice(0,17).replace(/…$/, '') + '…';
+  }
+  return lines;
+}
 
 function layout(items: Incident[]) {
   const products = new Map<string, Incident[]>();
@@ -22,58 +45,77 @@ function layout(items: Incident[]) {
   }
   const groups = [...products.entries()].sort(([a, left], [b, right]) =>
     right.length - left.length || collator.compare(a,b));
+  const blocks = groups.map(([key, members]) => {
+    const columns = members.length === 1 ? 1 : 2 * Math.ceil(Math.sqrt(members.length / 14));
+    const rows = Math.ceil(members.length / columns);
+    const width = columns * (CARD_WIDTH + CARD_GAP) + (columns === 1 ? 10 : 64);
+    const height = rows * (CARD_HEIGHT + CARD_GAP) + 32;
+    return {key, members, columns, width, height};
+  });
+  // Cluster bounds include the cards themselves and a clear band for the product name.
+  const gutter = 20;
+  const area = blocks.reduce((sum, b) => sum + (b.width + gutter) * (b.height + gutter), 0);
+  const wrap = Math.max(1, Math.sqrt(area * 1.55), ...blocks.map(b=>b.width));
   const clusters: Cluster[] = [];
-  // Pack product clusters on a spiral. Coordinates stay independent of zoom and window size.
-  let searchRadius = 0;
-  for (const [key, members] of groups) {
-    const radius = 34 + Math.ceil(Math.sqrt(members.length) * 17);
-    let x = 0, y = 0;
-    if (clusters.length) {
-      let distance = Math.max(0, searchRadius - radius * 3);
-      let angle = clusters.length * GOLDEN_ANGLE;
-      while (clusters.some(c => Math.hypot(x-c.x, y-c.y) < c.radius + radius + 12)) {
-        angle += 0.48;
-        distance += 1.8;
-        x = 1.32 * distance * Math.cos(angle);
-        y = distance * Math.sin(angle);
-      }
-      searchRadius = distance;
-    }
-    const sorted = members.sort((a,b) => collator.compare(normalize(a.service), normalize(b.service)) || collator.compare(a.id,b.id));
-    const phase = clusters.length * GOLDEN_ANGLE;
+  let left = 0, top = 0, shelfHeight = 0, width = 1, height = 1;
+  for (const b of blocks) {
+    if (left && left + b.width > wrap) {left = 0; top += shelfHeight + gutter; shelfHeight = 0;}
+    const x = left + b.width / 2, y = top + b.height / 2;
+    const sorted = b.members.sort((a,b)=>collator.compare(normalize(a.service),normalize(b.service)) || collator.compare(a.id,b.id));
     const nodes = sorted.map((item,i) => {
-      const angle = phase + i * Math.PI * 2 / sorted.length;
-      const arm = sorted.length <= 12 ? radius * (i % 2 ? .78 : .62) : 18 + Math.sqrt((i + 1) / sorted.length) * (radius - 30);
-      const a = sorted.length <= 12 ? angle : phase + i * GOLDEN_ANGLE;
-      return {item, product:key, service:normalize(item.service), x:x + arm * Math.cos(a), y:y + arm * Math.sin(a)};
+      const col = i % b.columns, row = Math.floor(i / b.columns);
+      const countRows = Math.ceil(sorted.length/b.columns);
+      const outward = 8 + 14*Math.sin(Math.PI*(row+.5)/countRows);
+      return {item, product:b.key, service:normalize(item.service),
+        x:x + (col - (b.columns - 1)/2) * (CARD_WIDTH + CARD_GAP)
+          + (b.columns === 1 ? 0 : col < b.columns / 2 ? -outward : outward),
+        y:top + 37 + row * (CARD_HEIGHT + CARD_GAP) + CARD_HEIGHT/2};
     });
-    clusters.push({key, name:members[0].productName?.trim() || '', x, y, radius, nodes, tone:clusters.length % 5});
+    clusters.push({key:b.key, name:sorted[0].productName?.trim() || '', x,y,width:b.width,height:b.height,
+      nodes,tone:clusters.length % 5});
+    width = Math.max(width,left + b.width); height = Math.max(height,top + b.height);
+    left += b.width + gutter; shelfHeight = Math.max(shelfHeight,b.height);
   }
-  const left = Math.min(0, ...clusters.map(c=>c.x-c.radius)), right = Math.max(1, ...clusters.map(c=>c.x+c.radius));
-  const top = Math.min(0, ...clusters.map(c=>c.y-c.radius)), bottom = Math.max(1, ...clusters.map(c=>c.y+c.radius));
-  return {clusters, nodes:clusters.flatMap(c=>c.nodes), center:{x:(left+right)/2,y:(top+bottom)/2},
-    width:right-left, height:bottom-top};
+  return {clusters,nodes:clusters.flatMap(c=>c.nodes),center:{x:width/2,y:height/2},width,height};
 }
 
 export function RelatedMap({items,onOpenIncident}:{items:Incident[];onOpenIncident:()=>void}) {
   const graph = useMemo(()=>layout(items),[items]);
   const svg = useRef<SVGSVGElement>(null);
   const [size,setSize] = useState({width:640,height:340});
-  const [camera,setCamera] = useState<Camera | null>(null);
+  const [camera,setCamera] = useState<Camera | 'initial' | null>('initial');
   const [selected,setSelected] = useState('');
   const [hover,setHover] = useState('');
   const [query,setQuery] = useState('');
   const [searchOpen,setSearchOpen] = useState(false);
   const listId = useId();
+  const tooltipId = useId();
+  const cardClip = useId();
   const [cursor,setCursor] = useState(0);
   const selectedNode = graph.nodes.find(n=>n.item.id===selected);
   const cluster = selectedNode && graph.clusters.find(c=>c.key===selectedNode.product);
   const neighbors = cluster?.key ? cluster.nodes.filter(n=>n!==selectedNode) : [];
   const sameService = neighbors.filter(n=>selectedNode?.service && n.service===selectedNode.service);
-  const fit = Math.min((size.width-34)/graph.width,(size.height-32)/graph.height,1.7);
-  const view = camera ?? {...graph.center,zoom:1};
+  const fit = Math.max(.001, Math.min((size.width-34)/graph.width,(size.height-32)/graph.height,1.7));
+  const first = graph.clusters[0];
+  const overview = {...graph.center,zoom:1};
+  // Start a dense snapshot at reading size; fit remains available as a full overview.
+  const initialZoom = Math.min(10,1.35/fit);
+  const initialX = size.width/(2*fit*initialZoom), initialY = size.height/(2*fit*initialZoom);
+  const initialView = first && fit < 1.15
+    ? {x:clamp(first.x,Math.min(graph.center.x,initialX),Math.max(graph.center.x,graph.width-initialX)),
+       y:clamp(first.y,Math.min(graph.center.y,initialY),Math.max(graph.center.y,graph.height-initialY)),zoom:initialZoom}
+    : overview;
+  const view = camera === 'initial' ? initialView : camera ?? overview;
   const scale = Math.max(.001,fit)*view.zoom;
   const project = (p:Point):Point => ({x:(p.x-view.x)*scale+size.width/2, y:(p.y-view.y)*scale+size.height/2});
+  const cardScale = Math.min(scale,1.7);
+  const hovering = graph.nodes.find(n=>n.item.id===hover);
+  const hoverCenter = hovering && project(hovering);
+  const tipAnchor = hoverCenter && {
+    x:hoverCenter.x, y:hoverCenter.y-CARD_HEIGHT*cardScale/2, bottom:hoverCenter.y+CARD_HEIGHT*cardScale/2,
+  };
+  const visibleTip = tipAnchor && tipAnchor.x >= 0 && tipAnchor.x <= size.width && tipAnchor.bottom >= 0 && tipAnchor.y <= size.height;
   const search = normalize(query);
   const found = useMemo(()=>search ? graph.nodes.filter(({item})=>
     [item.id,item.header,item.productName,item.service].some(value=>normalize(value).includes(search)))
@@ -94,7 +136,7 @@ export function RelatedMap({items,onOpenIncident}:{items:Incident[];onOpenIncide
 
   function zoomAt(factor:number, from:Point, to=from) {
     setCamera(old=>{
-      const v=old ?? {...graph.center,zoom:1};
+      const v=old === 'initial' ? initialView : old ?? overview;
       const zoom=clamp(v.zoom*factor,.4,10);
       return {zoom, x:v.x+(from.x-size.width/2)/(fit*v.zoom)-(to.x-size.width/2)/(fit*zoom),
         y:v.y+(from.y-size.height/2)/(fit*v.zoom)-(to.y-size.height/2)/(fit*zoom)};
@@ -125,6 +167,7 @@ export function RelatedMap({items,onOpenIncident}:{items:Incident[];onOpenIncide
   }
   function down(e:PointerEvent<SVGSVGElement>) {
     if (e.button!==0) return;
+    if (!(e.target as Element).closest('[data-incident-id]')) setHover('');
     if (!pointers.current.size) {dragged.current=false;travel.current=0;}
     pointers.current.set(e.pointerId,point(e));
     (e.target as Element).setPointerCapture(e.pointerId);
@@ -138,7 +181,7 @@ export function RelatedMap({items,onOpenIncident}:{items:Incident[];onOpenIncide
     pointers.current.set(e.pointerId,p);
     travel.current+=Math.hypot(p.x-previous.x,p.y-previous.y);
     if (travel.current<3 && !other) return;
-    dragged.current=true;
+    dragged.current=true;setHover('');
     if (other) {
       const distance=Math.hypot(p.x-other.x,p.y-other.y);
       const before=Math.hypot(previous.x-other.x,previous.y-other.y);
@@ -146,26 +189,16 @@ export function RelatedMap({items,onOpenIncident}:{items:Incident[];onOpenIncide
     } else zoomAt(1,previous,p);
   }
   function focusSearch(node:Node) {
-    setSelected(node.item.id);setCamera({x:node.x,y:node.y,zoom:Math.max(view.zoom,2.2)});
+    setHover('');setSelected(node.item.id);setCamera({x:node.x,y:node.y,zoom:Math.min(10,Math.max(view.zoom,1.35/fit))});
     setQuery(node.item.id);setSearchOpen(false);
   }
   const focalPoint = {x:size.width/2,y:size.height/2};
   const legend = <div className="graph-legend"><span><Diamond size={10}/>Продукт</span><span><i/>Инцидент</span>
     {sameService.length > 0 && <span><i className="graph-legend-service"/>Общий сервис</span>}
   </div>;
-  // Prefer the active product label when space is too tight for all labels at overview scale.
-  const labels: {text:string; x:number; y:number; half:number}[]=[];
-  for (const c of [cluster,...graph.clusters.filter(g=>g!==cluster)]) {
-    if (!c?.name) continue;
-    const {x,y}=project(c);
-    const text=c.name.length>25 ? c.name.slice(0,24)+'…' : c.name;
-    const half=text.length*3.25+4, labelY=y-11;
-    if (x+half<0 || x-half>size.width || labelY<7 || labelY>size.height) continue;
-    if (!labels.some(l=>Math.abs(l.y-labelY)<17 && Math.abs(l.x-x)<l.half+half)) {
-      labels.push({text,x,y:labelY,half});
-    }
-  }
-  return <div className="incident-graph">
+  return <div className="incident-graph" onKeyDown={e=>{
+    if (e.key==='Escape' && hover) {e.preventDefault();e.stopPropagation();setHover('');}
+  }}>
     <div className="graph-toolbar">
       <div className="graph-search" onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget as Element))setSearchOpen(false);}}>
         <Search size={15} aria-hidden="true"/>
@@ -198,36 +231,54 @@ export function RelatedMap({items,onOpenIncident}:{items:Incident[];onOpenIncide
       <svg ref={svg} aria-label="Граф инцидентов по продуктам и сервисам" onPointerDown={down} onPointerMove={move}
         onPointerUp={e=>pointers.current.delete(e.pointerId)} onPointerCancel={e=>pointers.current.delete(e.pointerId)}
         onLostPointerCapture={e=>pointers.current.delete(e.pointerId)}>
+        <defs><clipPath id={cardClip}><rect x={-CARD_WIDTH/2+6} y={-CARD_HEIGHT/2+2}
+          width={CARD_WIDTH-12} height={CARD_HEIGHT-4}/></clipPath></defs>
         {graph.clusters.map(c=>{
-          const hub=project(c), grouped=!!c.key, focused=c===cluster;
+          const labelCenter=project({x:c.x,y:c.y-c.height/2+15});
+          const hub=project({x:c.x,y:c.nodes.length===1 ? c.y-c.height/2+25 : c.y+14});
+          const grouped=!!c.key, focused=c===cluster;
+          const labelScale=Math.min(scale,1.45);
+          const label=c.name.length>Math.floor(c.width/6.8) ? c.name.slice(0,Math.floor(c.width/6.8)-1)+'…' : c.name;
           return <g key={c.key} className={'graph-cluster graph-tone-'+c.tone} data-muted={!!cluster && !focused}>
             {grouped && <g aria-hidden="true">{c.nodes.map(n=>{
               const p=project(n);
-              return <line key={n.item.id} x1={hub.x} y1={hub.y} x2={p.x} y2={p.y} className="graph-edge" data-on={n===selectedNode}/>;
-            })}<rect className="graph-hub" x={hub.x-3.5} y={hub.y-3.5} width="7" height="7" rx="1" transform={'rotate(45 '+hub.x+' '+hub.y+')'}><title>{c.name}</title></rect></g>}
+              const endX=p.x-Math.sign(p.x-hub.x)*CARD_WIDTH*cardScale/2;
+              const endY=p.x===hub.x ? p.y-CARD_HEIGHT*cardScale/2 : p.y;
+              const mid=(hub.x+endX)/2;
+              return <path key={n.item.id} d={`M ${hub.x} ${hub.y} C ${mid} ${hub.y}, ${mid} ${endY}, ${endX} ${endY}`}
+                fill="none" className="graph-edge" data-on={n===selectedNode}/>;
+            })}<g transform={'translate('+hub.x+' '+hub.y+') scale('+labelScale+')'}>
+              <rect className="graph-hub" x="-3.5" y="-3.5" width="7" height="7" rx="1" transform="rotate(45)"/>
+              <text className="graph-labels" textAnchor="middle" y={(labelCenter.y-hub.y)/labelScale}>{label}</text>
+            </g></g>}
             {focused && selectedNode && sameService.map(n=>{
               const p=project(n), s=project(selectedNode);
               return <line key={n.item.id} className="graph-service-edge" x1={s.x} y1={s.y} x2={p.x} y2={p.y}/>;
             })}
             {c.nodes.map(n=>{
-              const p=project(n), chosen=selectedNode===n, showId=chosen || hover===n.item.id;
-              const title=n.item.id+' · '+(n.item.header || 'Без названия');
-              return <g transform={'translate('+p.x+' '+p.y+')'} key={n.item.id} data-incident-id={n.item.id}
-                className="graph-node" data-selected={chosen} tabIndex={0} role="button" aria-label={title} aria-pressed={chosen}
-                onClick={()=>{if(!dragged.current)setSelected(n.item.id);}}
-                onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSelected(n.item.id);}}}
-                onMouseEnter={()=>setHover(n.item.id)} onMouseLeave={()=>setHover('')}
+              const p=project(n), chosen=selectedNode===n;
+              const title=n.item.header || 'Без названия';
+              return <g transform={'translate('+p.x+' '+p.y+') scale('+cardScale+')'} key={n.item.id} data-incident-id={n.item.id}
+                className="graph-node" data-selected={chosen} tabIndex={0} role="button" aria-label={n.item.id+' · '+title}
+                aria-describedby={visibleTip && hover===n.item.id?tooltipId:undefined} aria-pressed={chosen}
+                onClick={()=>{if(!dragged.current){setSelected(n.item.id);setHover(n.item.id);}}}
+                onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSelected(n.item.id);setHover(n.item.id);}}}
+                onPointerEnter={e=>{if(e.pointerType!=='touch'&&!pointers.current.size)setHover(n.item.id);}}
+                onPointerLeave={e=>{if(e.pointerType!=='touch')setHover('');}}
                 onFocus={()=>setHover(n.item.id)} onBlur={()=>setHover('')}>
-                <title>{title}</title><circle r="11" fill="transparent"/>
-                {chosen && <circle className="graph-halo" r="10"/>}
-                <circle className="graph-dot" r={chosen?5.5:4}/>
-                {showId && <text className="graph-id" x="9" y="4">{n.item.id}</text>}
+                <rect className="graph-card-body" x={-CARD_WIDTH/2} y={-CARD_HEIGHT/2} width={CARD_WIDTH} height={CARD_HEIGHT} rx="4"/>
+                <rect className="graph-card-accent" data-level={n.item.priorityId ?? 0} x={-CARD_WIDTH/2+2} y="-12" width="2.5" height="24" rx="1.2"/>
+                <g clipPath={'url(#'+cardClip+')'} pointerEvents="none">
+                  <text className="graph-card-id" x="-45" y="-9">{n.item.id}</text>
+                  <text className="graph-card-title">{caption(title).map((line,i)=>
+                    <tspan x="-45" y={3+i*11} key={i}>{line}</tspan>)}</text>
+                </g>
               </g>;
             })}
           </g>;
         })}
-        <g className="graph-labels" aria-hidden="true">{labels.map(l=><text key={l.text+l.x} x={l.x} y={l.y} textAnchor="middle">{l.text}</text>)}</g>
       </svg>
+      {hovering && tipAnchor && visibleTip && <IncidentTooltip id={tooltipId} item={hovering.item} anchor={tipAnchor} bounds={size}/>}
       {!!items.length && legend}
       {!items.length && <div className="graph-empty">Для текущих фильтров нет инцидентов.</div>}
     </div>
