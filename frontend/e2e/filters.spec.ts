@@ -54,7 +54,7 @@ test('быстрый выбор объединяет очереди и сохр�
   const categories=page.getByRole('navigation',{name:'Группы инцидентов'});
   await expect(categories.getByRole('link')).toHaveCount(4);
   const panel=await open(page);
-  await expect(panel.locator('.filter-tabs button')).toHaveText(['Фильтры','Расширенные']);
+  await expect(panel.locator('.filter-tabs button')).toHaveText(['Фильтры','Расширенные','Связи']);
   await expect(panel.getByRole('button',{name:'Мои представления'})).toHaveCount(0);
   await expect(sortButton(panel)).toContainText('По умолчанию');
   await expect(panel.locator('summary').filter({hasText:'Текущая команда'})).toBeHidden();
@@ -97,6 +97,37 @@ test('быстрый выбор объединяет очереди и сохр�
   await page.getByTestId('group-assigned').getByRole('button',{name:'Сбросить условия'}).click();
   await expect(categories.getByRole('link')).toHaveCount(4);
   await expect(page.getByTestId('group-history')).toContainText('LAB-2');
+});
+
+test('карта связей учитывает фильтр, обновляется по SSE и открывает карточку на телефоне',async({page,records})=>{
+  await login(page);
+  const panel=await open(page);
+  await panel.getByRole('button',{name:'Критические',exact:true}).click();
+  await panel.getByRole('button',{name:'Связи',exact:true}).click();
+  const anchorPicker=panel.getByRole('button',{name:'Базовый инцидент',exact:true});
+  await anchorPicker.click();
+  const options=page.getByRole('listbox').getByRole('option');
+  await expect(options.filter({hasText:'LAB-12'})).toHaveCount(0); // Закрытый инцидент вне отбора.
+  await options.filter({hasText:/LAB-2\b/}).click();
+  await expect(panel.locator('.relation-anchor')).toHaveAttribute('href','/incidents/LAB-2');
+  const neighbors=panel.locator('.relation-node');
+  await expect(neighbors).toHaveCount(1);
+  await expect(neighbors).toHaveAttribute('href','/incidents/LAB-10');
+
+  await page.setViewportSize({width:390,height:844});
+  await anchorPicker.click();
+  await options.filter({hasText:/LAB-20\b/}).click();
+  await expect(neighbors).toHaveCount(0);
+  await expect(panel.locator('.relation-empty')).toBeVisible();
+  const sibling={...records.find(item=>item.id==='LAB-20')!,id:'LAB-21',sysId:'lab-21',header:'Потеря пакетов'};
+  await publish(JSON.stringify([...records,sibling]));
+  await expect(neighbors).toHaveCount(1);
+  await expect(neighbors).toHaveText(/Потеря пакетов/);
+  const map=panel.locator('.relation-map');
+  await expect.poll(()=>map.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
+  await neighbors.click();
+  await expect(page).toHaveURL(/\/incidents\/LAB-21$/);
+  await expect(page.getByRole('heading',{name:'Потеря пакетов',exact:true})).toBeVisible();
 });
 
 test('расширенные фильтры работают с поиском, условия и сортировка восстанавливаются после перезагрузки',async({page,records})=>{

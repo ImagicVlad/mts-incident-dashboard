@@ -1,0 +1,102 @@
+.nav-popover.filter-panel.relations-panel {
+  width: min(900px, calc(100vw - 24px));
+  --relation-surface: var(--surface, white);
+  --relation-ink: var(--ink, #212630);
+  --relation-wire: #b6bdc9;
+  --relation-accent: #be1736;
+  --relation-tint: #fff4f5;
+}
+:root[data-theme="dark"] .relations-panel {
+  --relation-wire: #637082;
+  --relation-accent: var(--rose);
+  --relation-tint: #35262e;
+}
+.relation-controls { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.relation-controls label { flex: none; color: var(--muted); font-size: .82rem; }
+.relation-controls .sort-picker-trigger { flex: 1; }
+.relation-controls .sort-picker-trigger > span {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.relation-heading { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
+.relation-heading h3 { display: inline-flex; align-items: center; gap: 7px; margin: 0; font-size: 1rem; }
+.relation-heading > :is(span,b) {
+  padding: 1px 7px; border: 1px solid var(--line); border-radius: 12px;
+  font-size: .76rem; font-weight: 550; line-height: 1.4; color: var(--muted);
+}
+.relation-caption, .relation-empty { margin: 5px 0 12px; color: var(--muted); font-size: .81rem; line-height: 1.45; }
+.relation-map {
+  --wire-gap: clamp(18px, 3vw, 36px);
+  --branch-gap: 12px;
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: center; gap: var(--wire-gap); position: relative;
+  padding: 17px 12px; margin-top: 12px; border: 1px solid var(--line); border-radius: 12px;
+  background-color: color-mix(in srgb, var(--relation-surface) 97%, var(--muted));
+  background-image: radial-gradient(color-mix(in srgb, var(--relation-wire) 38%, transparent) .7px, transparent .8px);
+  background-size: 12px 12px;
+}
+.relation-branch { display: grid; grid-auto-rows: 1fr; gap: var(--branch-gap); position: relative; grid-row: 1; }
+.relation-branch.left { grid-column: 1; }
+.relation-branch.right { grid-column: 3; }
+.relation-branch:empty { display: none; }
+.relation-map :is(.relation-node,.relation-anchor) {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 5px; min-width: 0;
+  position: relative; padding: 12px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--relation-surface); color: var(--relation-ink); text-decoration: none;
+}
+.relation-map .relation-anchor {
+  grid-column: 2; grid-row: 1; background: var(--relation-tint);
+  border-color: color-mix(in srgb, var(--relation-accent) 52%, var(--relation-surface));
+}
+.relation-map :is(.relation-node,.relation-anchor):hover { border-color: var(--muted); }
+.relation-map :is(.relation-node,.relation-anchor):focus-visible { outline: 2px solid var(--relation-accent); outline-offset: 2px; }
+.relation-map :is(.relation-node,.relation-anchor) strong {
+  font-size: .92rem; line-height: 1.28; letter-spacing: -.015em; overflow-wrap: anywhere;
+}
+.relation-id, .relation-note, .relation-status {
+  display: inline-flex; align-items: center; gap: 5px; max-width: 100%;
+  font-size: .72rem; line-height: 1.25; overflow-wrap: anywhere;
+}
+.relation-id { width: 100%; justify-content: space-between; color: var(--muted); font-family: ui-monospace, Consolas, monospace; }
+.relation-anchor .relation-id { color: var(--relation-accent); }
+.relation-product { color: var(--muted); font-size: .78rem; line-height: 1.35; overflow-wrap: anywhere; }
+.relation-note { padding-top: 7px; margin-top: 2px; width: 100%; border-top: 1px solid var(--line); font-weight: 550; color: var(--relation-ink); }
+.relation-note svg { color: var(--muted); }
+.relation-status { color: var(--muted); }
+.relation-map svg { flex-shrink: 0; }
+.relation-branch:not(:empty)::after, .relation-node::before {
+  content: ""; position: absolute; pointer-events: none;
+  top: 50%; width: calc(var(--wire-gap) / 2 + 1px); border-top: 1px solid var(--relation-wire);
+}
+.relation-branch.left::after { left: calc(100% + var(--wire-gap) / 2); }
+.relation-branch.right::after { right: calc(100% + var(--wire-gap) / 2); }
+.relation-branch.left .relation-node::before { left: 100%; }
+.relation-branch.right .relation-node::before { right: 100%; }
+.relation-node:not(:only-child)::before { height: calc(50% + var(--branch-gap) / 2 + 2px); }
+.relation-node:last-child:not(:only-child)::before { top: auto; bottom: 50%; border-top: 0; border-bottom: 1px solid var(--relation-wire); }
+.left .relation-node:not(:only-child)::before { border-right: 1px solid var(--relation-wire); }
+.right .relation-node:not(:only-child)::before { border-left: 1px solid var(--relation-wire); }
+.left .relation-node:first-child::before { border-top-right-radius: 9px; }
+.left .relation-node:last-child::before { border-bottom-right-radius: 9px; }
+.right .relation-node:first-child::before { border-top-left-radius: 9px; }
+.right .relation-node:last-child::before { border-bottom-left-radius: 9px; }
+.relation-pagination { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 10px; font-size: .8rem; color: var(--muted); }
+.relation-pagination button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  min-width: 32px; min-height: 32px; padding: 4px 8px; background: var(--relation-surface); border: 1px solid var(--line); border-radius: 7px;
+}
+.relation-pagination button:hover:enabled { border-color: var(--muted); }
+@media (max-width: 700px) {
+  .relation-controls { align-items: stretch; flex-direction: column; gap: 5px; }
+  .relation-map { grid-template-columns: minmax(0, 1fr); gap: 0; padding: 10px; }
+  .relation-map .relation-anchor { grid-column: 1; grid-row: 1; }
+  .relation-branch.left, .relation-branch.right {
+    grid-column: 1; grid-row: auto; grid-auto-rows: auto; gap: 0;
+    margin-left: 12px; padding-left: 18px; border-left: 1px solid var(--relation-wire);
+  }
+  .relation-branch .relation-node { margin-top: 8px; }
+  .relation-map .relation-branch::after { display: none; }
+  .relation-map .relation-branch .relation-node::before {
+    width: 19px; height: 0; left: auto; right: 100%; bottom: auto; top: 50%;
+    border: 0; border-top: 1px solid var(--relation-wire); border-radius: 0;
+  }
+}
