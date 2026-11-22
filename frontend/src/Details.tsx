@@ -97,6 +97,8 @@ export function Details() {
           с {stamp(assignedSince)} {zoneLabel}
         </time>}</dd>
       </div>)}</dl>
+      <section className="record-text"><h3>Описание</h3><p>{description || 'Описание отсутствует.'}</p></section>
+      {item.solution && <section className="record-text"><h3>Решение из источника</h3><p>{item.solution}</p></section>}
       {dates.length > 0 && <section className="incident-dates" aria-label="Даты инцидента">
         <header><h3>Сроки</h3><span>{zoneLabel}</span></header>
         <dl>{dates.map(({label,value,day})=><div key={label}>
@@ -106,8 +108,6 @@ export function Details() {
           </time></dd>
         </div>)}</dl>
       </section>}
-      <section className="record-text"><h3>Описание</h3><p>{description || 'Описание отсутствует.'}</p></section>
-      {item.solution && <section className="record-text"><h3>Решение из источника</h3><p>{item.solution}</p></section>}
       {item.diagnostics?.length>0 && <details className="record-text"><summary>Замечания к записи</summary><ul>{item.diagnostics.map((d,k)=><li key={k}>{d}</li>)}</ul></details>}
       {onCoordinators && user.role==='coordinator' && snapshot && <footer className="assignment-footer">
         <Assignment key={JSON.stringify([item.id,item.assignedEmployee,item.lastAssignmentToTeamDateTime])} item={item} incidents={snapshot.incidents}/>
