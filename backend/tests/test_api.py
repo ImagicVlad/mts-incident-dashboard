@@ -200,7 +200,8 @@ def test_summary_cache_chat_context_and_input_contract(source):
         body = json.loads(req.content)
         calls.append(body)
         assert req.headers["authorization"] == "Bearer test-key"
-        content = json.dumps(NOTES) if "response_format" in body else "demo-001 проверен"
+        snapshot = json.loads(body["messages"][1]["content"])
+        content = json.dumps(NOTES if "incident" in snapshot else {"scope":"shift", "answer":"demo-001 проверен"})
         return httpx.Response(200, json={"choices": [{"message": {"content": content}}]})
 
     app = create_app(settings(source, llm_api_key="test-key"), provider_transport=httpx.MockTransport(provider))

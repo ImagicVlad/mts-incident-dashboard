@@ -24,7 +24,14 @@ SUMMARY_PROMPT = (
     "верни в candidate номер примера (целое число от 1), а в rationale — одно конкретное сходство, "
     "объясняющее выбор команды. Пользователь увидит ссылку на карточку: не упоминай порядковый "
     "номер примера в тексте. Пример показывает назначение, но не доказывает общую причину. "
-    "При слабом сходстве или отсутствии routingExamples верни candidate: null и rationale: null."
+    "При слабом сходстве или отсутствии routingExamples верни candidate: null и rationale: null. "
+    "Отдельно сравни симптомы текущего инцидента с pastCases, если список передан. Только при конкретном "
+    "совпадении наблюдаемого сбоя выбери один случай. В resolvedCase верни объект с number из pastCases "
+    "и двумя короткими дословными непрерывными цитатами: currentQuote из заголовка или описания incident, "
+    "pastQuote из заголовка или описания выбранного случая (каждая до 180 символов). Цитируй сам симптом. "
+    "Общие продукт, сервис, команда, шаблон регистрации или слово «сбой» не свидетельствуют о сходстве. "
+    "Если подходящего случая нет, верни resolvedCase: null. Не переноси причину и решение из истории в оценку "
+    "текущего инцидента."
 )
 
 ShortText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1600)]
@@ -39,6 +46,8 @@ class SummaryNotes(BaseModel):
 class ModelAssessment(SummaryNotes):
     candidate: int | None = Field(default=None, strict=True)
     rationale: ShortText | None = None
+    # Optional evidence is validated separately; a bad citation must not discard the summary.
+    resolvedCase: object | None = None
 
 
 class RoutingAdvice(BaseModel):

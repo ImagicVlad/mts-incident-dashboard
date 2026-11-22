@@ -121,6 +121,17 @@ summary { cursor: pointer; }
 .assistant-prose table { width: 100%; table-layout: fixed; border-collapse: collapse; }
 .assistant-prose :is(th, td) { text-align: start; vertical-align: top; padding: .3em; border-bottom: 1px solid var(--line); }
 .summary-sections { display: grid; gap: 16px; margin: 14px 0; }
+.summary-case { min-width: 0; overflow-wrap: anywhere; }
+.summary-case summary, .summary-case a {
+  color: var(--lavender, #534583); font-size: .88rem;
+  text-decoration: underline; text-underline-offset: .16em;
+}
+.summary-case summary { width: fit-content; font-weight: 600; }
+.summary-case a { display: inline-block; margin-top: 10px; }
+.summary-case dl { margin: 10px 0 0; padding-inline-start: 12px; border-inline-start: 2px solid var(--line); }
+.summary-case dt { font-size: .8rem; font-weight: 600; color: var(--muted); }
+.summary-case dd { margin: 3px 0 10px; font-size: .92rem; line-height: 1.45; white-space: pre-line; }
+.summary-case dd:last-child { margin-bottom: 0; }
 .record-panels { display: flex; flex-direction: column; gap: inherit; }
 .record-panels > .focus { flex: none; }
 .record-panels .ai-note { display: flex; flex-direction: column; min-height: 0; }

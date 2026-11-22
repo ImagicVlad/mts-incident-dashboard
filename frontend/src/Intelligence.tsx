@@ -100,6 +100,7 @@ export function Summary({item}:{item:Incident}) {
   const stale = result && (result.stale || result.epoch!==snapshot?.epoch || result.snapshotVersion!==snapshot?.snapshotVersion);
   const notes = result?.assessment;
   const routing = !stale && notes?.routing;
+  const similarCase = stale ? null : result?.similarCase;
   const generate = async () => {
     if (pending) return;
     const controller = new AbortController(); abort.current=controller;
@@ -111,11 +112,20 @@ export function Summary({item}:{item:Incident}) {
     {configured===false && <p>ИИ не настроен. Для сводки требуется подключение провайдера на сервере.</p>}
     {notes && <div className="summary-sections" role="region" aria-label="Текст ИИ-сводки" tabIndex={0}>
       <p className="answer-text"><AnswerText text={notes.situation}/></p>
+      {similarCase && <details className="summary-case" key={similarCase.incidentId}>
+        <summary>Похожий решённый случай</summary>
+        <Link to={pathFor(similarCase.incidentId)}>{similarCase.incidentId} · {similarCase.header}</Link>
+        <dl>
+          <dt>Что совпало</dt><dd>{similarCase.match}</dd>
+          <dt>Кто разбирал</dt><dd>{similarCase.team || 'В записи команда не указана'}</dd>
+          <dt>Что помогло</dt><dd>{similarCase.solution}</dd>
+        </dl>
+      </details>}
       <section><h3>Влияние</h3><p className="answer-text"><AnswerText text={notes.impact}/></p></section>
       {routing && <section className="summary-routing"><h3>Рекомендация по команде</h3>
         {routing.team && <strong>{routing.team}</strong>}
         <p>{routing.reason}</p>
-        {routing.exampleId && <Link to={pathFor(routing.exampleId)}>Похожий инцидент · {routing.exampleId}</Link>}
+        {routing.exampleId && routing.exampleId !== similarCase?.incidentId && <Link to={pathFor(routing.exampleId)}>Пример назначения · {routing.exampleId}</Link>}
       </section>}
       <section><h3>Что проверить</h3><p className="answer-text"><AnswerText text={notes.check}/></p></section>
     </div>}

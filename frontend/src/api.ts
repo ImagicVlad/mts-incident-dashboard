@@ -24,6 +24,7 @@ export interface Snapshot {
 export interface Account { login: string; displayName: string; role: 'coordinator' }
 export interface Answer { answer: string; epoch: string; snapshotVersion: number; asOf: string; stale?: boolean }
 export interface SummaryAnswer extends Answer {
+  similarCase: { incidentId: string; header: string; match: string; team: string | null; solution: string } | null;
   assessment: {
     situation: string; impact: string; check: string;
     routing: { team: string | null; exampleId: string | null; reason: string } | null;

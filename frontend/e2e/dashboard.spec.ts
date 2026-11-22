@@ -294,7 +294,7 @@ test('сводка показывает пример назначения и с�
     await summaryText.press('Control+End');
     await expect.poll(() => summaryText.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
     expect(await bottom(section.getByRole('button'))).toBeLessThan(await bottom(section));
-    await expect(section.getByRole('link', {name: 'Похожий инцидент · ' + example.id})).toHaveAttribute('href', '/incidents/' + example.id);
+    await expect(section.getByRole('link', {name: 'Пример назначения · ' + example.id})).toHaveAttribute('href', '/incidents/' + example.id);
     incident.assignedGroupName = 'Расчёты';
     await replace(JSON.stringify(records));
     await expect(section.getByText(/данные изменились/)).toBeVisible();
@@ -302,6 +302,49 @@ test('сводка показывает пример назначения и с�
     await section.getByRole('button', {name: 'Обновить сводку'}).click();
     await expect(section.getByText(/данные изменились/)).toHaveCount(0);
     await expect(section.getByRole('link')).toHaveCount(0);
+  } finally { await replace(original); }
+});
+
+test('в сводке раскрывается один решённый случай с переходом к исходной карточке', async ({page}) => {
+  const original = await readFile(file, 'utf8');
+  const issue = {id:'CURRENT', header:'Квитанции поступают дважды', stateEnum:'Assigned'};
+  const past = {id:'PAST', header:'Повторная доставка квитанций', stateEnum:'Closed',
+    assignedGroupName:'Команда доставки', solution:'Остановили второй обработчик очереди.'};
+  const similarCase = {incidentId:past.id, header:past.header, match:'Одна квитанция приходит дважды.',
+    team:past.assignedGroupName, solution:past.solution};
+  try {
+    await replace(JSON.stringify([issue, past]));
+    await page.route('**/api/health', route => route.fulfill({json:{status:'ok', aiConfigured:true, displayTimezone:'Europe/Moscow'}}));
+    await page.route('**/api/ai/summary', async route => {
+      const live = await page.request.get('/api/incidents');
+      const {epoch, snapshotVersion, serverTime} = await live.json();
+      const current = route.request().postDataJSON().incidentId === issue.id;
+      await route.fulfill({json:{epoch, snapshotVersion, asOf:serverTime, answer:'Сводка',
+        assessment:{situation:'Квитанции доставлены дважды.', impact:'Затронута доставка квитанций.',
+          check:'Проверить обработчики.', routing:current ? {team:past.assignedGroupName, exampleId:past.id, reason:'Совпадает сервис.'} : null},
+        similarCase:current ? similarCase : null}});
+    });
+    await page.goto('/incidents/' + issue.id);
+    await signIn(page);
+    const summary = page.locator('.ai-note');
+    await summary.getByRole('button', {name:'Сформировать сводку'}).click();
+    const disclosure = summary.getByText('Похожий решённый случай', {exact:true});
+    await expect(disclosure).toBeVisible();
+    await expect(summary.getByText(past.solution)).toBeHidden();
+    await disclosure.focus();
+    await page.keyboard.press('Enter');
+    const details = summary.locator('details[open]');
+    await expect(details.getByText(similarCase.match)).toBeVisible();
+    await expect(details.getByText(past.assignedGroupName)).toBeVisible();
+    await expect(details.getByText(past.solution)).toBeVisible();
+    const link = summary.getByRole('link');
+    await expect(link).toHaveCount(1);
+    await expect(link).toHaveAttribute('href','/incidents/' + past.id);
+    await link.click();
+    await expect(page.getByRole('heading', {name:past.header, exact:true})).toBeVisible();
+    await summary.getByRole('button', {name:'Сформировать сводку'}).click();
+    await expect(summary.getByRole('heading', {name:'Что проверить'})).toBeVisible();
+    await expect(disclosure).toHaveCount(0);
   } finally { await replace(original); }
 });
 
