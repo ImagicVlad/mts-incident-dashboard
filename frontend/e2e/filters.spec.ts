@@ -8,7 +8,8 @@ const coord='КЦ ИТ Координаторы Массовых Инциден�
 const file=process.env.E2E_SOURCE!;
 async function publish(data:string) {
   await writeFile(file+'.writing',data,'utf8');
-  await rename(file+'.writing',file);
+  // On Windows the live-source watcher can still have the previous snapshot open.
+  await expect(async()=>{await rename(file+'.writing',file);}).toPass({timeout:1500,intervals:[50,100,200]});
 }
 function incidents(now:number) {
   const at=(minutes:number)=>new Date(now+minutes*60000).toISOString();
@@ -54,7 +55,7 @@ test('быстрый выбор объединяет очереди и сохр�
   const categories=page.getByRole('navigation',{name:'Группы инцидентов'});
   await expect(categories.getByRole('link')).toHaveCount(4);
   const panel=await open(page);
-  await expect(panel.locator('.filter-tabs button')).toHaveText(['Фильтры','Расширенные','Связи']);
+  await expect(panel.locator('.filter-tabs button')).toHaveText(['Фильтры','Расширенные']);
   await expect(panel.getByRole('button',{name:'Мои представления'})).toHaveCount(0);
   await expect(sortButton(panel)).toContainText('По умолчанию');
   await expect(panel.locator('summary').filter({hasText:'Текущая команда'})).toBeHidden();
@@ -99,35 +100,87 @@ test('быстрый выбор объединяет очереди и сохр�
   await expect(page.getByTestId('group-history')).toContainText('LAB-2');
 });
 
-test('карта связей учитывает фильтр, обновляется по SSE и открывает карточку на телефоне',async({page,records})=>{
+test('карта связей открывается отдельно, масштабируется и восстанавливает выбранный инцидент',async({page,records})=>{
+  await page.setViewportSize({width:1440,height:900});
   await login(page);
   const panel=await open(page);
   await panel.getByRole('button',{name:'Критические',exact:true}).click();
-  await panel.getByRole('button',{name:'Связи',exact:true}).click();
-  const anchorPicker=panel.getByRole('button',{name:'Базовый инцидент',exact:true});
-  await anchorPicker.click();
-  const options=page.getByRole('listbox').getByRole('option');
-  await expect(options.filter({hasText:'LAB-12'})).toHaveCount(0); // Закрытый инцидент вне отбора.
-  await options.filter({hasText:/LAB-2\b/}).click();
-  await expect(panel.locator('.relation-anchor')).toHaveAttribute('href','/incidents/LAB-2');
-  const neighbors=panel.locator('.relation-node');
-  await expect(neighbors).toHaveCount(1);
-  await expect(neighbors).toHaveAttribute('href','/incidents/LAB-10');
+  await panel.getByRole('button',{name:'Расширенные',exact:true}).click();
+  const launch=panel.getByRole('button',{name:'Карта связей',exact:true});
+  await launch.click();
+  await expect(panel).toBeHidden();
+  const map=page.getByRole('dialog',{name:'Карта связей',exact:true});
+  const control=(name:string)=>map.getByRole('button',{name,exact:true});
+  await expect(map).toHaveAttribute('data-mode','floating');
+  expect(records.length).toBe(8);
+  const initial=(await map.boundingBox())!;
+  const handle=(await map.locator('.relation-titlebar').boundingBox())!;
+  const x=handle.x+60, y=handle.y+handle.height/2;
+  await page.mouse.move(x,y);await page.mouse.down();
+  await page.mouse.move(x-70,y+24,{steps:4});await page.mouse.up();
+  await expect.poll(async()=>(await map.boundingBox())!.x).toBeCloseTo(initial.x-70,0);
+  await control('Изменить размер карты').press('ArrowLeft');
+  await expect.poll(async()=>(await map.boundingBox())!.width).toBeLessThan(initial.width);
+  await expect(map.locator('[data-incident-id="LAB-12"]')).toHaveCount(0);
+  const node=map.locator('[data-incident-id="LAB-2"]');
+  const canvas=(await map.locator('.graph-stage > svg').boundingBox())!;
+  const originalPosition=await node.getAttribute('transform');
+  await page.mouse.move(canvas.x+12,canvas.y+12);await page.mouse.down();
+  await page.mouse.move(canvas.x+36,canvas.y+28,{steps:4});await page.mouse.up();
+  await expect(node).not.toHaveAttribute('transform',originalPosition!);
+  await node.locator('.graph-dot').click();
+  await expect(map.locator('.graph-inspector')).toContainText('LAB-2');
+  const scale=map.locator('.graph-scale');
+  await control('Вписать карту').click();
+  await expect(scale).toHaveText('100%');
+  await control('Приблизить').click();
+  await expect.poll(async()=>parseInt(await scale.innerText())).toBeGreaterThan(100);
+  await control('Вписать карту').click();
+  await control('Отдалить').click();
+  await expect.poll(async()=>parseInt(await scale.innerText())).toBeLessThan(100);
 
+  await control('Развернуть карту').click();
+  await expect(map).toHaveAttribute('data-mode','maximized');
+  const banner=await page.getByRole('banner').boundingBox();
+  expect((await map.boundingBox())!.y).toBeCloseTo(banner!.y+banner!.height,0);
+  await control('Восстановить размер карты').click();
+  await control('Свернуть карту').click();
+  await expect(map).toHaveAttribute('data-mode','minimized');
+  await open(page);
+  await panel.getByRole('button',{name:'Расширенные',exact:true}).click();
+  await launch.click();
+  await expect(map).toHaveCount(1);
+  await expect(map).toHaveAttribute('data-mode','floating');
+  await expect(map.locator('.graph-inspector')).toContainText('LAB-2');
+  await control('Закрыть карту').click();
+  await expect(map).toHaveCount(0);
+});
+
+test('поиск на мобильной карте видит обновления смены и открывает карточку',async({page,records})=>{
   await page.setViewportSize({width:390,height:844});
-  await anchorPicker.click();
-  await options.filter({hasText:/LAB-20\b/}).click();
-  await expect(neighbors).toHaveCount(0);
-  await expect(panel.locator('.relation-empty')).toBeVisible();
+  await login(page);
+  const panel=await open(page);
+  await panel.getByRole('button',{name:'Расширенные',exact:true}).click();
+  await panel.getByRole('button',{name:'Карта связей',exact:true}).click();
+  const map=page.getByRole('dialog',{name:'Карта связей',exact:true});
+  await expect.poll(()=>map.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
+  const search=map.getByRole('searchbox',{name:'Поиск на карте'});
+  await search.fill('Потеря пакетов');
+  const result=map.locator('.graph-results').getByRole('button',{name:/LAB-21/});
+  await expect(result).toHaveCount(0);
   const sibling={...records.find(item=>item.id==='LAB-20')!,id:'LAB-21',sysId:'lab-21',header:'Потеря пакетов'};
   await publish(JSON.stringify([...records,sibling]));
-  await expect(neighbors).toHaveCount(1);
-  await expect(neighbors).toHaveText(/Потеря пакетов/);
-  const map=panel.locator('.relation-map');
-  await expect.poll(()=>map.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
-  await neighbors.click();
+  await expect(result).toBeVisible();
+  await search.press('Enter');
+  await expect(map.locator('.graph-inspector')).toContainText('LAB-21');
+  await map.getByRole('link',{name:'Открыть инцидент'}).click();
   await expect(page).toHaveURL(/\/incidents\/LAB-21$/);
   await expect(page.getByRole('heading',{name:'Потеря пакетов',exact:true})).toBeVisible();
+  await expect(map).toHaveAttribute('data-mode','minimized');
+  await map.getByRole('button',{name:'Восстановить карту'}).click();
+  await expect(map.locator('.graph-inspector')).toContainText('LAB-21');
+  await map.getByRole('button',{name:'Закрыть карту'}).click();
+  await expect(map).toHaveCount(0);
 });
 
 test('расширенные фильтры работают с поиском, условия и сортировка восстанавливаются после перезагрузки',async({page,records})=>{

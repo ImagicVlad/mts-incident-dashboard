@@ -29,6 +29,13 @@
 .filter-tabs button { flex:1 1 auto; border:0; background:none; color:var(--muted); font-size:.8rem; line-height:1.2; padding:10px 2px; border-bottom:2px solid transparent; }
 .filter-tabs button[aria-pressed="true"] { border-color:#dd1834; color:#20242d; font-weight:650; }
 .filter-scroll { padding:15px 18px; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
+.filter-panel .relation-launch {
+  display:flex; align-items:center; gap:10px; width:100%; margin:9px 0 0; padding:11px 12px;
+  border:1px solid var(--line); border-radius:9px; background:transparent; font-size:.88rem; font-weight:550;
+}
+.relation-launch svg { color:var(--muted); }
+.relation-launch svg:last-child { margin-left:auto; }
+.filter-panel .relation-launch:hover { border-color:var(--muted); }
 .filter-panel-head, .filter-tabs, .filter-footer { flex:none; }
 .filter-subtitle { font-weight:650; font-size:.86rem; }
 .quick-filter-heading { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px 12px; margin-top:14px; padding-top:12px; border-top:1px solid var(--line); }

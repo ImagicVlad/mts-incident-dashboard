@@ -1,9 +1,8 @@
 import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { ArrowDown, ArrowUp, ArrowDownUp, Check, ChevronDown, Plus, RotateCcw, Search, SlidersHorizontal, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowDownUp, ArrowUpRight, Check, ChevronDown, Network, Plus, RotateCcw, Search, SlidersHorizontal, X } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { useLive } from '../live';
 import { useViews } from './ViewContext';
-import { RelatedMap, defaultBase } from './RelatedMap';
 import { collator, createdOptions, employeesForTeams, facetKeys, facets, queueOptions, queues, slaOptions, sortFields, toggle, type Facet, type Queue, type Sort, type SortField } from './incidentViews';
 import './filters.css';
 
@@ -67,7 +66,7 @@ function QuickFilters({hasFilters}:{hasFilters:boolean}) {
     </div>
   </>;
 }
-function AdvancedFilters() {
+function AdvancedFilters({onOpenMap}:{onOpenMap:()=>void}) {
   const {settings:s,patch}=useViews();
   const {formats:{zoneLabel}}=useLive();
   return <>
@@ -82,25 +81,12 @@ function AdvancedFilters() {
       {s.queueTime==='range' && <Range min={s.queueMin} max={s.queueMax} onMin={queueMin=>patch({queueMin})} onMax={queueMax=>patch({queueMax})}/>}
     </Group>
     <Group name="Атрибуты инцидента">{facetKeys.filter(field=>field!=='assignedGroupName' && field!=='assignedEmployee').map(field=><FacetPicker key={field} field={field}/>)}</Group>
+    <button className="relation-launch" type="button" aria-haspopup="dialog" onClick={onOpenMap}>
+      <Network size={17} aria-hidden="true"/><span>Карта связей</span><ArrowUpRight size={16} aria-hidden="true"/>
+    </button>
   </>;
 }
 
-function Relations({onOpenIncident}:{onOpenIncident:()=>void}) {
-  const {result:{items}} = useViews();
-  const [selected,setSelected] = useState('');
-  const base = items.find(item=>item.id===selected) ?? defaultBase(items);
-  if (!base) return <p className="relation-empty">В текущей выборке нет инцидентов.</p>;
-  return <>
-    <div className="relation-controls">
-      <label htmlFor="relation-base">Базовый инцидент</label>
-      <FilterPicker id="relation-base" name="Базовый инцидент" selected={base.id}
-        display={base.id+' · '+(base.header || 'Без названия')}
-        options={items.map(item=>({value:item.id,label:item.id+' · '+(item.header || 'Без названия')}))}
-        onSelect={setSelected}/>
-    </div>
-    <RelatedMap key={base.id} base={base} items={items} onOpenIncident={onOpenIncident}/>
-  </>;
-}
 const commonSorts: (Sort & {label:string})[] = [
   {field:'upcoming',dir:'asc',label:'Ближайший SLA'},
   {field:'overdue',dir:'desc',label:'Сначала давно просроченные'},
@@ -221,20 +207,21 @@ function useFilterChips() {
   for (const k of facetKeys) for (const v of s.choices[k]) chips.push({label:facets[k]+' · '+(index.options[k].get(v) ?? 'вне снимка'),remove:()=>toggleChoice(k,v)});
   return chips;
 }
-export function FilterTools() {
+export function FilterTools({onOpenMap}:{onOpenMap:()=>void}) {
   const {result,sort,storageError}=useViews(), chips=useFilterChips();
   const [open,setOpen]=useState(false), [tab,setTab]=useState('Фильтры');
+  const openingMap=useRef(false);
   return <Popover open={open} onOpenChange={setOpen}>
     <PopoverTrigger asChild><button className="filter-trigger" data-active={chips.length>0 || sort.length>0}>
       <SlidersHorizontal size={17}/>Фильтры{chips.length>0 && <b>{chips.length}</b>}{sort.length>0 && <ArrowDownUp aria-label="Настроена сортировка" size={14}/>}
     </button></PopoverTrigger>
-    <PopoverContent className={tab==='Связи'?'filter-panel relations-panel':'filter-panel'} aria-label="Настройки списка инцидентов">
+    <PopoverContent className="filter-panel" aria-label="Настройки списка инцидентов"
+      onCloseAutoFocus={e=>{if (openingMap.current) {e.preventDefault();openingMap.current=false;}}}>
       <div className="filter-panel-head"><h2>Настройки списка</h2><button onClick={()=>setOpen(false)} aria-label="Закрыть настройки"><X size={18}/></button></div>
-      <div className="filter-tabs" role="group" aria-label="Раздел настроек">{['Фильтры','Расширенные','Связи'].map(t=><button key={t} aria-pressed={tab===t} onClick={()=>setTab(t)}>{t}</button>)}</div>
+      <div className="filter-tabs" role="group" aria-label="Раздел настроек">{['Фильтры','Расширенные'].map(t=><button key={t} aria-pressed={tab===t} onClick={()=>setTab(t)}>{t}</button>)}</div>
       <div className="filter-scroll" key={tab}>
         {tab==='Фильтры' && <><Ordering/><QuickFilters hasFilters={chips.length>0}/></>}
-        {tab==='Расширенные' && <AdvancedFilters/>}
-        {tab==='Связи' && <Relations onOpenIncident={()=>setOpen(false)}/>}
+        {tab==='Расширенные' && <AdvancedFilters onOpenMap={()=>{openingMap.current=true;setOpen(false);onOpenMap();}}/>}
       </div>
       {storageError && <small role="status" className="filter-error">Браузер не сохранил настройки. Они доступны до перезагрузки.</small>}
       <div className="filter-footer"><span>Инцидентов в списках <b>{result.count}</b></span><button onClick={()=>setOpen(false)}>Готово</button></div>

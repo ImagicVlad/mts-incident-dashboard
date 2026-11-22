@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { Link, useMatch, useNavigate } from 'react-router-dom';
 import { Bell, CircleAlert, Moon, Radio, Search, Sun, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
@@ -9,6 +9,11 @@ import { NotificationBell } from './NotificationBell';
 import { useViews } from './filters/ViewContext';
 import { FilterTools } from './filters/FilterTools';
 import { matchesSearch } from './filters/incidentViews';
+
+const RelationWindow = lazy(async () => {
+  const { RelationWindow } = await import('./filters/RelationWindow');
+  return {default: RelationWindow};
+});
 
 export function Header({user}: {user:Account}) {
   const [dark, setDark] = useState(() => document.documentElement.dataset.theme === 'dark');
@@ -22,13 +27,14 @@ export function Header({user}: {user:Account}) {
   const {snapshot} = useLive();
   const onDashboard = useMatch('/dashboard');
   const view=useViews();
+  const [mapRequest, setMapRequest] = useState(0);
   const [detailQuery,setDetailQuery]=useState('');
   const [query,setQuery]=onDashboard ? [view.query,view.setQuery] : [detailQuery,setDetailQuery];
   const [error,setError] = useState('');
   const navigate = useNavigate();
   const term = query.trim().toLocaleLowerCase('ru');
   const found = !term ? [] : onDashboard ? view.result.items : (snapshot?.incidents || []).filter(i=>matchesSearch(i,term));
-  return <header className="topbar dashboard-bar"><div className="bar-inner dashboard-nav">
+  return <><header className="topbar dashboard-bar"><div className="bar-inner dashboard-nav">
     <Link className="mts-mark" to="/dashboard" aria-label="МТС — на дашборд">
       <img src="/mts-logo.svg" width="40" height="40" alt=""/><span>МТС</span>
     </Link>
@@ -40,7 +46,7 @@ export function Header({user}: {user:Account}) {
         <span className="result-meta">{i.id} · {i.productName || 'Продукт не указан'}</span><strong>{i.header || 'Без заголовка'}</strong></Link>)}
         {!found.length && <p className="empty-result" role="status">Инциденты не найдены</p>}</div>}
     </form>
-    {onDashboard && snapshot?.hasSnapshot && <FilterTools/>}
+    {onDashboard && snapshot?.hasSnapshot && <FilterTools onOpenMap={()=>setMapRequest(n=>n+1)}/>}
     </div>
     <div className="dashboard-actions">
       <button type="button" className="theme-trigger" aria-label={themeLabel} title={themeLabel} onClick={toggleTheme}>
@@ -52,7 +58,11 @@ export function Header({user}: {user:Account}) {
           {error && <p role="alert" className="form-error">{error}</p>}
           <button className="logout" onClick={async()=>{try {await api('auth/logout',{}); window.dispatchEvent(new Event('session-expired')); navigate('/login',{replace:true});} catch(e){setError(errorText(e));}}}>Выйти из аккаунта</button>
         </PopoverContent></Popover>
-    </div></div></header>;
+    </div></div></header>
+    {mapRequest > 0 && <Suspense fallback={null}>
+      <RelationWindow items={view.result.items} openRequest={mapRequest} onClose={()=>setMapRequest(0)}/>
+    </Suspense>}
+  </>;
 }
 export function LiveStatus() {
   const {snapshot,link,bootstrapError} = useLive();
