@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from .config import Settings
+from .related_incidents import related_pairs
 from .similar_cases import SimilarCase, grounded_case, past_cases, symptoms
 from .assessment import (
     SUMMARY_PROMPT, IncidentAssessment, ModelAssessment, assemble_assessment, routing_examples,
@@ -45,6 +46,42 @@ scope = "shift", а answer — обычный короткий ответ или
 """
 OFF_TOPIC_REPLY = "Я помогаю с инцидентами дежурной смены. Могу проверить ближайший срок или подсказать, какая команда ведёт инцидент."
 
+RELATION_PROMPT = """
+Для вопроса о возможной связи между инцидентами используй relatedCandidates:
+это пары из всего снимка с наблюдаемыми совпадениями. Оцени их по заголовкам и evidence.
+Даже без явной ссылки ITSM можно предложить гипотезу. Общая причина требует проверки.
+Добавь поле related — массив порядковых номеров подходящих пар, начиная с 1, до трёх.
+Если нет обоснованных пар, верни пустой массив. Сервер сам покажет карточки и основания.
+При выборе related верни answer = "". Если задан и отдельный рабочий вопрос,
+ответ на него помести в additionalAnswer. Не включай туда предположения о связях.
+Если вопрос вообще не о сопоставлении инцидентов, верни related = null и отвечай как обычно.
+"""
+
+RELATION_TERMS = re.compile(
+    r"\b(?:взаимо)?связан\w*|\bвзаимосвяз\w*|\b(?:похож|аналогичн|коррел|дублирующ)\w*"
+    r"|\b(?:общ\w+|одн\w+)\s+(?:причин|сбо|проблем|авари)\w*"
+    r"|\bсвяз[ьи]\s+(?:с\s+|между\s+|инцидент|у\s+inc)|\bдубликат\w*"
+    r"|\b(?:есть ли|покажи|найди)\s+(?:между ними\s+)?связи\b",
+    re.IGNORECASE,
+)
+
+
+def relation_focus(question: str, messages: list["Message"], rows_by_id: dict) -> set[str]:
+    canonical = {id_.casefold(): id_ for id_ in rows_by_id}
+
+    def mentions(text: str) -> set[str]:
+        words = set(re.findall(r"[\w-]+", text.casefold()))
+        # An explicitly requested missing INC must not return unrelated pairs.
+        return {canonical.get(word, word.upper()) for word in words
+                if word in canonical or re.fullmatch(r"inc-?\d+", word)}
+
+    focus = mentions(question)
+    if not focus and re.search(r"\b(?:ними?|ней|этими?|этот|этого|него|они)\b", question):
+        for previous in reversed(messages[:-1]):
+            focus = mentions(previous.content)
+            if focus:
+                break
+    return focus
 
 FIELDS = ("id", "dataOrigin", "header", "productName", "service", "state", "stateEnum", "priority",
           "priorityId", "assignedGroupName", "assignedEmployee", "submitDate", "deadline",
@@ -89,6 +126,11 @@ class AIAnswer(BaseModel):
 class ChatReply(BaseModel):
     scope: Literal["shift", "off_topic"]
     answer: str
+
+
+class RelationReply(ChatReply):
+    related: list[int] | None = None
+    additionalAnswer: str = ""
 
 
 class SummaryAnswer(AIAnswer):
@@ -140,12 +182,27 @@ def chat_context(snapshot: dict, messages: list[Message], deadline_scope: set[st
     by_id = {row["id"]: row for row in records}
     nearest = next((by_id[id_] for id_ in snapshot["deadlineOrder"]
                     if deadline_scope is None or id_ in deadline_scope), None)
-    return {"total": len(records), "counts": snapshot["counts"], "nearestDeadline": nearest,
+    context = {"total": len(records), "counts": snapshot["counts"], "nearestDeadline": nearest,
             "deadlineScope": "вся смена" if deadline_scope is None else "с учётом фильтров дашборда",
             "deadlineRule": "Ближайший срок — nearestDeadline. Если он уже наступил, укажи просрочку и отсутствие предстоящих сроков в этом списке. Если null, активных записей со сроком в списке нет.",
             "selection": sorted_rows[:8],
             "groupsInSelection": {k: [row["id"] for row in sorted_rows[:8] if row["id"] in ids]
                                   for k, ids in groups.items()}}
+    if RELATION_TERMS.search(question):
+        focus = relation_focus(question, messages, by_id)
+        context["relatedCandidates"] = related_pairs(snapshot["incidents"], focus) if focus <= by_id.keys() else []
+    return context
+
+
+def describe_relations(candidates: list[dict], choices: list[int]) -> str:
+    selected = [candidates[i - 1] for i in dict.fromkeys(choices) if 1 <= i <= len(candidates)][:3]
+    if not selected:
+        return "В текущем снимке недостаточно совпадений, чтобы предположить связь."
+    lines = ["**Возможные связи**"]
+    for pair in selected:
+        left, right = pair["ids"]
+        lines.append(f"- {left} и {right} — " + " ".join(pair["evidence"]))
+    return "\n\n".join(lines) + "\n\nОбщая причина пока не подтверждена."
 
 
 class AIService:
@@ -181,10 +238,14 @@ class AIService:
         data = {"asOf": snap["serverTime"], "snapshotVersion": snap["snapshotVersion"],
                 "displayTimezone": self.settings.display_timezone,
                 "sourceStatus": snap["sourceStatus"], **context}
+        prompt = SYSTEM_PROMPT
+        if incident_id is None:
+            prompt += "\n" + CHAT_SCOPE_PROMPT
+            if "relatedCandidates" in context:
+                prompt += "\n" + RELATION_PROMPT
         payload = {"model": self.settings.llm_model, "max_completion_tokens": 700,
                    "response_format": {"type": "json_object"},
-                   "messages": [{"role": "system", "content": SYSTEM_PROMPT if incident_id is not None
-                                else SYSTEM_PROMPT + "\n" + CHAT_SCOPE_PROMPT},
+                   "messages": [{"role": "system", "content": prompt},
                                 {"role": "user", "content": json.dumps(data, ensure_ascii=False)},
                                 *messages]}
         url = self.settings.llm_base_url.rstrip("/") + "/chat/completions"
@@ -214,11 +275,23 @@ class AIService:
 
     async def chat(self, body: ChatInput):
         snap = self.capture()
-        result = await self.request(snap, chat_context(snap, body.messages, body.deadlineScope),
+        context = chat_context(snap, body.messages, body.deadlineScope)
+        result = await self.request(snap, context,
                                     [message.model_dump() for message in body.messages])
         try:
-            reply = ChatReply.model_validate_json(result.answer)
+            schema = RelationReply if "relatedCandidates" in context else ChatReply
+            reply = schema.model_validate_json(result.answer)
             answer = OFF_TOPIC_REPLY if reply.scope == "off_topic" else reply.answer.strip()
+            if reply.scope == "shift" and isinstance(reply, RelationReply):
+                choices = reply.related
+                if "related" not in reply.model_fields_set and re.search(
+                    r"\b(?:связанн|похож)\w*\s+инцидент\w*\b", body.messages[-1].content, re.IGNORECASE
+                ):
+                    # Older JSON replies can omit the selection on a direct request for related incidents.
+                    choices = list(range(1, len(context["relatedCandidates"]) + 1))
+                if choices is not None:
+                    relations = describe_relations(context["relatedCandidates"], choices)
+                    answer = "\n\n".join(filter(None, (reply.additionalAnswer.strip(), relations)))
             if not answer:
                 raise ValueError
         except ValueError:
