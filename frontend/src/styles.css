@@ -2,6 +2,7 @@
 @import "tailwindcss/utilities.css" layer(utilities);
 @import "./base.css";
 @import "./overview.css";
+@import "./theme.css";
 
 body { min-width: 280px; }
 .container { max-width: none; }
@@ -140,9 +141,8 @@ summary { cursor: pointer; }
 .summary-action, .text-action { font: inherit; cursor: pointer; color: #534583; }
 .text-action { border: 0; background: transparent; text-decoration: underline; }
 .summary-action { border: 1px solid #cec9dd; border-radius: 8px; background: white; padding: 8px 10px; display: inline-flex; align-items: center; gap: 6px; font-size: .87rem; margin-top: 12px; }
-.chat-message small, .ai-note small, .integration-note { color: var(--muted); font-size: .79rem; line-height: 1.45; }
+.chat-message small, .ai-note small { color: var(--muted); font-size: .79rem; line-height: 1.45; }
 .ai-note small, .chat-message small { display: block; margin-top: 8px; }
-.integration-note { text-align: center; }
 .toasts { position: fixed; z-index: 65; bottom: 18px; right: 18px; width: min(360px,calc(100vw - 36px)); display: grid; gap: 8px; }
 .toast { background: #fff; border: 1px solid #e5c8a9; border-left: 3px solid #ac4a00; border-radius: 10px; padding: 13px; box-shadow: 0 8px 24px #17233620; display: flex; align-items: flex-start; gap: 8px; }
 .toast > svg { color: #ac4a00; flex: none; }

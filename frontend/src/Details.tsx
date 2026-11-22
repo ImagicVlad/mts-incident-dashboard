@@ -104,7 +104,7 @@ export function Details() {
       </section>
       <Summary key={item.id} item={item}/>
       </div>
-      {item.itsmUrl && /^https?:\/\//i.test(item.itsmUrl) ? <a className="button secondary" href={item.itsmUrl} target="_blank" rel="noopener noreferrer">Открыть в ITSM <ExternalLink size={16}/></a> : item.dataOrigin !== 'defense-scenario' && <p className="integration-note">Внешняя ITSM не подключена</p>}
+      {item.itsmUrl && /^https?:\/\//i.test(item.itsmUrl) && <a className="button secondary" href={item.itsmUrl} target="_blank" rel="noopener noreferrer">Открыть в ITSM <ExternalLink size={16}/></a>}
     </aside></div></article>
     <IncidentActivity key={item.id} item={item}/>
   </main>;

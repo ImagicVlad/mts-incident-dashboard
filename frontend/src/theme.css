@@ -1,0 +1,66 @@
+.theme-trigger {
+  color: #47515e;
+  background: transparent;
+  border: 1px solid var(--line);
+}
+.theme-trigger:hover { background: #f2f3f5; }
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface: #22262d;
+  --raised: #30363f;
+  --ink: #f1f2f5;
+  --muted: #b0b8c5;
+  --line: #434a56;
+  --rose: #ff8c9c;
+  --lavender: #cbbaf0;
+  background: #171a20;
+  color: var(--ink);
+
+  :is(.dashboard-bar, .overview, .nav-popover) {
+    --attention: #ffb26c;
+    --high-accent: #f49c51;
+    --metric-hover: var(--rose);
+  }
+  :is(.topbar,.metric,.incident,.paper,.incident-activity,.auth-layout,.secondary,.nav-popover,
+      .search-results,.theme-trigger,.bell-trigger,.chat-form,.chat-message,.activity-node,.toast,
+      .filter-trigger,.filter-secondary,.sort-picker-trigger,.filter-presets button,.active-filters button,
+      .summary-action,.filter-panel select,.filter-panel input:where(:not([type="checkbox"]))) {
+    color: var(--ink); background: var(--surface); border-color: var(--line);
+  }
+  :is(.auth-box input,.incident-search input,.comment-composer,.activity-meta code,.sort-row) {
+    background: #292e36; color: var(--ink); border-color: var(--line);
+  }
+  :is(.incident-search,.comment-composer):focus-within,
+  .incident-search:focus-within input { background: var(--surface); border-color: #b97e8b; }
+  input::placeholder, textarea::placeholder { color: var(--muted); }
+  :is(.filter-field,.count,.card-foot b,.filter-footer b,.filter-tabs button[aria-pressed="true"],
+      .password-toggle,.filter-trigger,.account-trigger,.theme-trigger,.bell-trigger) { color: var(--ink); }
+  .dashboard-actions .account-trigger, .filter-footer button { background: var(--raised); }
+  :is(.metric,.incident,.assignment-start):is(:hover,:focus-visible) { border-color: #808b9c; }
+  :is(.theme-trigger,.bell-trigger,.sort-picker-option,.filter-trigger,.filter-presets button,
+      .result-link,.active-filters button,.sort-picker-trigger,.filter-panel-head button,.password-toggle):is(:hover,:focus-visible) {
+    background: var(--raised); color: var(--ink);
+  }
+  .metric.red { background: #352329; border-color: #71414b; --accent: var(--rose); }
+  .metric.amber { background: #332a23; border-color: #705136; }
+  .metric .count { color: var(--ink); }
+  .incident[data-priority="critical"] { --priority-ink: var(--rose); }
+  :is(.priority-red,.overdue,.source-error,.form-error,.chat-error,.assignment-start svg) { color: var(--rose); }
+  .pill.active { color: #c6d7ed; background: #303b4a; }
+  .pill.done { color: #9fdeb7; background: #253c32; }
+  .resolved .time-left { color: #9fdeb7; }
+  .pill.research { color: var(--lavender); background: #3b314b; }
+  :is(.filter-trigger[data-active="true"],.filter-presets button[aria-pressed="true"],
+      .sort-picker-option[aria-selected="true"],.quick-filter-reset:enabled,.search-results .result-link:hover) {
+    color: var(--rose); background: #432b34; border-color: #784953;
+  }
+  :is(.incident-chat,.ai-note) { background: #262532; border-color: #464254; }
+  :is(.chat-titlebar,.chat-message,.chat-form,.chat-suggestions button) { border-color: #4e495e; }
+  :is(.chat-stars,.chat-message.from-user,.assistant-author svg,.assistant-prose pre,.assistant-prose code,
+      .chat-controls button:hover,.chat-suggestions button:hover) { background: #3b354d; }
+  :is(.ai-note .eyebrow,.chat-stars,.chat-controls button,.assistant-author,.summary-action,.summary-routing a,
+      .chat-message > strong,.assistant-prose a,.chat-suggestions button,.text-action) { color: var(--lavender); }
+  .assistant-prose blockquote { color: var(--muted); }
+  :is(.chat-form button,.comment-submit):disabled { color: var(--muted); background: var(--raised); }
+}

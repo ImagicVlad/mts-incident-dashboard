@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict
 
 from .config import Settings
 
-Role = Literal["coordinator", "executor"]
+Role = Literal["coordinator"]
 
 
 class Profile(BaseModel):
@@ -32,7 +32,7 @@ class Accounts:
                 CREATE TABLE IF NOT EXISTS accounts (
                     login TEXT PRIMARY KEY NOT NULL,
                     display_name TEXT NOT NULL,
-                    role TEXT NOT NULL CHECK(role IN ('coordinator', 'executor')),
+                    role TEXT NOT NULL CHECK(role = 'coordinator'),
                     password_hash TEXT NOT NULL
                 )
             """)
@@ -54,7 +54,7 @@ class Accounts:
 
     def credentials(self, login: str) -> tuple[Profile, str] | None:
         with closing(sqlite3.connect(self.path)) as db:
-            row = db.execute("SELECT login,display_name,role,password_hash FROM accounts WHERE login=?",
+            row = db.execute("SELECT login,display_name,role,password_hash FROM accounts WHERE login=? AND role='coordinator'",
                              (login.strip().casefold(),)).fetchone()
         if row is None:
             return None
@@ -67,7 +67,7 @@ def main():
     create = commands.add_parser("create", help="Создать аккаунт")
     create.add_argument("--login", required=True)
     create.add_argument("--display-name", required=True)
-    create.add_argument("--role", choices=["coordinator", "executor"], required=True)
+    create.add_argument("--role", choices=["coordinator"], default="coordinator")
     create.add_argument("--password-stdin", action="store_true", help="Прочитать одну строку из stdin")
     args = parser.parse_args()
     password = sys.stdin.readline().rstrip("\r\n") if args.password_stdin else getpass.getpass("Пароль: ")

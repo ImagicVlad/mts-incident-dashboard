@@ -2,7 +2,7 @@
 .header-search-tools .incident-search { flex:1; }
 .header-search-tools .filter-trigger { flex:none; }
 @media (min-width:761px) {
-  .dashboard-nav:has(.filter-trigger) { grid-template-columns:1fr min(100% - 15rem, 680px) 1fr; }
+  .dashboard-nav:has(.filter-trigger) { grid-template-columns:minmax(140px,1fr) minmax(0,680px) minmax(140px,1fr); }
 }
 @media (max-width:600px) {
   .dashboard-nav:has(.filter-trigger) { grid-template-columns:1fr auto; row-gap:8px; padding-block:8px; }

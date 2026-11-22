@@ -9,7 +9,7 @@ async function replace(contents: string) {
   await rename(file + '.writing', file);
 }
 
-test('исполнитель входит в пустую форму, видит свою роль и комментирует без возможности назначения', async ({page}) => {
+test('координатор входит в пульт, меняет тему и комментирует под своим именем', async ({page}) => {
   const original = await readFile(file, 'utf8');
   try {
     const issue = {id:'TEST-ROLE',header:'Проверка роли',stateEnum:'Assigned',priorityId:4,
@@ -18,19 +18,25 @@ test('исполнитель входит в пустую форму, видит
     await page.goto('/login');
     await expect(page.getByLabel('Логин',{exact:true})).toHaveValue('');
     await expect(page.getByLabel('Пароль',{exact:true})).toHaveValue('');
-    await signIn(page,'executor');
+    await signIn(page);
+    await page.getByRole('button',{name:'Тёмная тема'}).click();
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
     await page.getByRole('button',{name:'Аккаунт',exact:true}).click();
-    await expect(page.locator('.account-panel')).toContainText('Тестовый исполнитель');
-    await expect(page.locator('.account-panel')).toContainText('Исполнитель');
+    await expect(page.locator('.account-panel')).toContainText('Тестовый координатор');
+    await expect(page.locator('.account-panel')).toContainText('Координатор');
     await page.keyboard.press('Escape');
     await page.getByTestId('group-assigned').getByRole('link').click();
     await expect(page.getByRole('heading',{name:issue.header,exact:true,level:1})).toBeVisible();
-    await expect(page.getByRole('button',{name:'Назначить команду'})).toHaveCount(0);
+    await expect(page.getByRole('button',{name:'Назначить команду'})).toBeVisible();
+    await expect(page.getByText('Внешняя ITSM не подключена')).toHaveCount(0);
+    await page.getByRole('button',{name:'Светлая тема'}).click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme','light');
     const log = page.getByRole('region',{name:'История изменений'});
-    await log.getByLabel('Комментарий',{exact:true}).fill('Результат проверки исполнителя.');
+    await log.getByLabel('Комментарий',{exact:true}).fill('Результат проверки смены.');
     await log.getByRole('button',{name:'Добавить комментарий'}).click();
-    const entry = log.locator('li').filter({hasText:'Результат проверки исполнителя.'});
-    await expect(entry).toContainText('e2e.executor');
+    const entry = log.locator('li').filter({hasText:'Результат проверки смены.'});
+    await expect(entry).toContainText('e2e.coordinator');
   } finally { await replace(original); }
 });
 

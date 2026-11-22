@@ -22,7 +22,7 @@ def check(origin: str):
     with client.open(req, timeout=10) as response:
         account = json.load(response)
         assert account["login"] == credentials["login"]
-        assert account["role"] in {"coordinator", "executor"}
+        assert account["role"] == "coordinator"
     with get("/api/incidents") as response:
         snapshot = json.load(response)
     assert snapshot["hasSnapshot"] and snapshot["sourceStatus"] == "ok"

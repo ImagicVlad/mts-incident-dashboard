@@ -21,7 +21,7 @@ export interface Snapshot {
   groups: Record<GroupId, string[]>; counts: Record<GroupId, number>;
   notifications: Notice[]; diagnostics: string[];
 }
-export interface Account { login: string; displayName: string; role: 'coordinator' | 'executor' }
+export interface Account { login: string; displayName: string; role: 'coordinator' }
 export interface Answer { answer: string; epoch: string; snapshotVersion: number; asOf: string; stale?: boolean }
 export interface SummaryAnswer extends Answer {
   assessment: {

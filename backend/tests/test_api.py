@@ -1,6 +1,7 @@
 import asyncio
 import json
 import socket
+import sqlite3
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -154,11 +155,21 @@ def test_empty_account_database_has_no_implicit_login(source):
         assert client.get("/api/auth/me").status_code == 401
 
 
-def test_executor_role_and_comment_identity(source, monkeypatch):
+def test_legacy_executor_cannot_sign_in(source):
+    database = source.parent / "legacy.sqlite3"
+    with sqlite3.connect(database) as db:
+        db.execute("CREATE TABLE accounts(login TEXT PRIMARY KEY, display_name TEXT, role TEXT, password_hash TEXT)")
+        db.execute("INSERT INTO accounts VALUES(?,?,?,?)",
+                   (CREDS["login"], "Инженер", "executor", PasswordHasher().hash(CREDS["password"])))
+    with TestClient(create_app(settings(source, accounts_db=database))) as client:
+        assert client.post("/api/auth/login", json=CREDS).status_code == 401
+
+
+def test_personal_comment_identity(source, monkeypatch):
     monkeypatch.setattr("app.store.RUNTIME", source.parent)
     options = settings(source)
     engineer = {"login": "engineer", "password": "engineer-test-only"}
-    Accounts(options.accounts_path).create(engineer["login"], "Инженер смены", "executor", engineer["password"])
+    Accounts(options.accounts_path).create(engineer["login"], "Инженер смены", "coordinator", engineer["password"])
     source.write_text(json.dumps([{**ROW, "assignedGroupName":COORDINATORS},
                                   {**ROW, "id":"team", "assignedGroupName":"Support"}]), encoding="utf-8")
     with TestClient(create_app(options)) as client:
@@ -166,13 +177,12 @@ def test_executor_role_and_comment_identity(source, monkeypatch):
         sign_in(client)
         operator_cookies = dict(client.cookies)
         client.cookies.clear()
-        profile = {"login":"engineer", "displayName":"Инженер смены", "role":"executor"}
+        profile = {"login":"engineer", "displayName":"Инженер смены", "role":"coordinator"}
         assert client.post("/api/auth/login", json=engineer).json() == profile
         assert client.get("/api/auth/me").json() == profile
         assert client.get("/api/incidents/demo-001").status_code == 200
         assignment = {"team":"Support", "employee":None, "expectedEmployee":None, "expectedTime":None}
         url = "/api/incidents/demo-001"
-        assert client.post(url + "/assignment", json=assignment).status_code == 403
         assert client.get(url).json()["assignedGroupName"] == COORDINATORS
         comment = {"id":"7dd0a087-3272-4e32-84b1-06ddd8607169", "text":"Проверка выполнена"}
         assert client.post(url + "/comments", json=comment).status_code == 204

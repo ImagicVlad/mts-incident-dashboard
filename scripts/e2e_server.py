@@ -23,7 +23,6 @@ if __name__ == "__main__":
             database = Path(directory) / "accounts.sqlite3"
             accounts = Accounts(database)
             accounts.create("e2e.coordinator", "Тестовый координатор", "coordinator", os.environ["E2E_COORDINATOR_PASSWORD"])
-            accounts.create("e2e.executor", "Тестовый исполнитель", "executor", os.environ["E2E_EXECUTOR_PASSWORD"])
             settings = Settings(_env_file=None, incidents_file=str(source), watch_polling=True, accounts_db=database,
                                 llm_api_key=None, cookie_secure=False, allowed_origins="http://127.0.0.1:5186")
             uvicorn.run(create_app(settings), host="127.0.0.1", port=8016)
