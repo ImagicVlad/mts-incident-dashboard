@@ -10,6 +10,7 @@ services:
       WATCH_POLLING: "true"
     volumes:
       - ./data/local:/app/data/local:ro
+      - ./data/local/defense:/app/data/local/defense
       - ./data/runtime:/app/data/runtime
     healthcheck:
       test: ["CMD", ".venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]

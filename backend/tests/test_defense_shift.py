@@ -98,6 +98,34 @@ def test_private_snapshot_and_exclusive_producer(tmp_path, monkeypatch):
     assert json.loads(source.read_bytes()) == mentor
 
 
+@pytest.mark.parametrize("mode", ["prepare", "run"])
+@pytest.mark.parametrize("previous", ['[{"id":"OLD","dataOrigin":"auto-generated"}]', '{broken'])
+def test_new_shift_discards_previous_run_but_keeps_new_arrivals(tmp_path, monkeypatch, mode, previous):
+    from app.generator_data import append_generated_incident
+
+    _, initial, events = inputs()
+    output = tmp_path / "working.json"
+    output.write_text(previous)
+    monkeypatch.setattr(shift, "SCENARIO", tmp_path)
+    monkeypatch.setattr(shift, "OUTPUT", output)
+    (tmp_path / "shift.json").write_text(json.dumps(initial))
+    (tmp_path / "timeline.json").write_text(json.dumps(events))
+    generated = []
+
+    def between_frames(delay):
+        if delay > 0 and not generated:
+            assert [row["id"] for row in json.loads(output.read_bytes())] == ["INC-1"]
+            generated.append(append_generated_incident(output))
+
+    monkeypatch.setattr(shift.time, "sleep", between_frames)
+    shift.publish(mode, True)
+    ids = [row["id"] for row in json.loads(output.read_bytes())]
+    if mode == "prepare":
+        assert ids == ["INC-1"]
+    else:
+        assert generated and ids == ["INC-1", "INC-2", *generated]
+
+
 def test_published_shift_covers_defense_cases_and_export_shape():
     expected_fields = set("""
         id sysId header description shortDescription incType state stateEnum stateId stateReason stateReasonId

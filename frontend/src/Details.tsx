@@ -77,8 +77,10 @@ export function Details() {
   const onCoordinators = snapshot?.groups.assigned.includes(item.id);
   const countdown = active(item)?remaining(item.deadline,now):null;
   const assignedAt = !onCoordinators && item.assignedGroupName ? item.lastAssignmentToTeamDateTime : null;
+  const sourceLabel = item.dataOrigin === 'defense-scenario' ? 'Сценарий защиты'
+    : item.dataOrigin === 'auto-generated' ? 'Автогенерация' : null;
   const rows = [
-    ...(item.dataOrigin === 'defense-scenario' ? [['Источник', 'Сценарий защиты']] : []),
+    ...(sourceLabel ? [['Источник', sourceLabel]] : []),
     ['Продукт',item.productName],['Сервис',item.service],['Приоритет',item.priority],
     [onCoordinators ? 'Профильная команда' : 'Команда назначения',onCoordinators ? 'Ещё не назначена' : item.assignedGroupName, assignedAt],
     [onCoordinators ? 'Координатор' : 'Исполнитель',item.assignedEmployee],

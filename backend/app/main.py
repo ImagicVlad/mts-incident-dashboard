@@ -18,6 +18,7 @@ from .ai import AIAnswer, AIService, ChatInput, SummaryAnswer, SummaryInput, inc
 from .config import Settings
 from .demo_data import prepare_default_demo
 from .domain import Incident, Snapshot, utc_string
+from .generator import IncidentGenerator
 from .security import COOKIE, Session, Sessions, check_origin
 from .store import AssignmentConflict, Store, utc_now
 
@@ -39,6 +40,11 @@ class Comment(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
     id: UUID
     text: str = Field(min_length=1, max_length=2000)
+
+
+class GeneratorState(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    enabled: bool
 
 
 class Health(BaseModel):
@@ -69,6 +75,7 @@ def create_app(settings: Settings | None = None, *, provider_transport=None) -> 
         store = Store(source_path, demo=not bool(settings.incidents_file),
                       polling=settings.watch_polling, itsm_url_template=settings.itsm_url_template)
         app.state.store = store
+        app.state.generator = IncidentGenerator(store.generate_incident, store.check_generator_source)
         app.state.sessions = Sessions(settings)
         async with httpx.AsyncClient(timeout=settings.llm_timeout_seconds,
                                      transport=provider_transport) as client:
@@ -77,6 +84,7 @@ def create_app(settings: Settings | None = None, *, provider_transport=None) -> 
             try:
                 yield
             finally:
+                await app.state.generator.set_enabled(False)
                 await app.state.ai.close()
                 await store.stop()
 
@@ -94,6 +102,25 @@ def create_app(settings: Settings | None = None, *, provider_transport=None) -> 
         if request.url.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
         return response
+
+    @app.get("/api/generator", response_model=GeneratorState, tags=["incidents"])
+    async def generator_state(request: Request, session: CurrentSession):
+        if session.profile.role != "coordinator":
+            raise HTTPException(403, "Генерация доступна координатору.")
+        return GeneratorState(enabled=request.app.state.generator.enabled)
+
+    @app.post("/api/generator", response_model=GeneratorState, tags=["incidents"])
+    async def set_generator(body: GeneratorState, request: Request, session: CurrentSession):
+        if session.profile.role != "coordinator":
+            raise HTTPException(403, "Генерация доступна координатору.")
+        generator = request.app.state.generator
+        try:
+            await generator.set_enabled(body.enabled)
+        except (UnicodeError, RecursionError, ValueError):
+            raise HTTPException(409, "Не удалось запустить генерацию. Проверьте формат и содержимое рабочего JSON.") from None
+        except OSError:
+            raise HTTPException(503, "Для генерации нужна доступная для записи рабочая копия JSON. Исходные выгрузки защищены.") from None
+        return GeneratorState(enabled=generator.enabled)
 
     @app.get("/api/health", response_model=Health, tags=["service"])
     async def health():

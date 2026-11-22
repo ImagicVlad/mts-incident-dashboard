@@ -6,8 +6,50 @@ import { displayFormats } from '../src/api';
 const file = process.env.E2E_SOURCE!;
 async function replace(contents: string) {
   await writeFile(file + '.writing', contents, 'utf8');
-  await rename(file + '.writing', file);
+  // The Windows file watcher can briefly hold the previous snapshot open.
+  await expect(() => rename(file + '.writing', file)).toPass({intervals:[25,50,100],timeout:1500});
 }
+
+test('генератор из меню аккаунта добавляет одну новую карточку в рабочую смену', async ({page, context}) => {
+  test.setTimeout(90_000);
+  const original = await readFile(file, 'utf8');
+  const seed = JSON.parse(original)[0];
+  const switchName = {name:'Автогенерация инцидентов'};
+  try {
+    await replace(JSON.stringify([seed]));
+    await page.goto('/login');
+    await signIn(page);
+    await expect(page.locator('.metrics')).toBeVisible();
+    await page.getByRole('button', {name:'Аккаунт', exact:true}).click();
+    const toggle = page.getByRole('switch', switchName);
+    await expect(toggle).toBeEnabled();
+    await expect(toggle).not.toBeChecked();
+    await toggle.click();
+    await expect(toggle).toBeChecked();
+    await page.keyboard.press('Escape');
+
+    const second = await context.newPage();
+    await second.goto('/dashboard');
+    await second.getByRole('button', {name:'Аккаунт', exact:true}).click();
+    await expect(second.getByRole('switch', switchName)).toBeChecked();
+    const incoming = page.locator('.incident[data-unread="true"]').first();
+    await expect(incoming).toBeVisible({timeout:65_000});
+    const generatedId = await incoming.getAttribute('data-incident-id');
+    const rows = JSON.parse(await readFile(file, 'utf8'));
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toEqual(seed);
+    expect(rows[1].id).toBe(generatedId);
+
+    await second.getByRole('switch', switchName).click();
+    await expect(second.getByRole('switch', switchName)).not.toBeChecked();
+    await page.getByRole('button', {name:'Аккаунт', exact:true}).click();
+    await expect(toggle).toBeEnabled();
+    await expect(toggle).not.toBeChecked();
+  } finally {
+    await context.request.post('/api/generator', {data:{enabled:false}});
+    await replace(original);
+  }
+});
 
 test('координатор входит в пульт, меняет тему и комментирует под своим именем', async ({page}) => {
   const original = await readFile(file, 'utf8');

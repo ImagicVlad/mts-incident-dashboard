@@ -11,7 +11,8 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
-from app.demo_data import DATE_FIELDS, write_records
+from app.demo_data import DATE_FIELDS
+from app.generator_data import publish_shift_frame
 from app.domain import normalize_records
 
 ORIGIN = "defense-scenario"
@@ -135,9 +136,9 @@ def publish(mode, scenario_only):
         frames = build_frames(mentor, initial, timeline, start)
         if mode == "prepare":
             frames = frames[:1]
-        for offset, rows in frames:
+        for index, (offset, rows) in enumerate(frames):
             time.sleep(max(0, clock + offset - time.monotonic()))
-            write_records(OUTPUT, rows)
+            publish_shift_frame(OUTPUT, rows, reset=index == 0)
             print(f"+{offset} с | выгрузка ментора: {len(mentor)}, сценарий: {len(rows) - len(mentor)} | {OUTPUT}", flush=True)
 
 

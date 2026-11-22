@@ -3,6 +3,7 @@
 import asyncio
 import json
 import os
+import tempfile
 from hashlib import sha256
 from collections import deque
 from collections.abc import AsyncIterator
@@ -13,7 +14,8 @@ from uuid import uuid4
 from watchfiles import awatch
 from .activity import ActivityLog, FEED_LIMIT
 
-from .demo_data import RUNTIME, atomic_write
+from .demo_data import ROOT, RUNTIME, TEMPLATE, atomic_write
+from .generator_data import append_generated_incident
 from .domain import OPEN, Incident, classify, critical_from, deadline_order, memberships, normalize_records, transitions, utc_string
 
 
@@ -148,6 +150,27 @@ class Store:
             self._signature = stamp
             self._accept(items, id_, author)
             return items[id_]
+
+    async def check_generator_source(self) -> None:
+        def check():
+            if self.path in (TEMPLATE, ROOT / "data/local/character_problems.json"):
+                raise PermissionError("Use a working copy, not the original export.")
+            # Do not modify data during activation. Atomic replacement requires write
+            # access to the directory as well as a valid, writable source file.
+            with self.path.open("r+", encoding="utf-8-sig") as source:
+                normalize_records(json.load(source), self.template)
+            with tempfile.TemporaryFile(dir=self.path.parent):
+                pass
+
+        async with self._lock:
+            await asyncio.to_thread(check)
+
+    async def generate_incident(self) -> None:
+        async with self._lock:
+            await asyncio.to_thread(append_generated_incident, self.path)
+        # Same update path as an external edit, including normal assignment overlays,
+        # activity, unread tracking and SSE. The watcher may already have loaded it.
+        await self.reload()
 
     async def reload(self) -> None:
         async with self._lock:

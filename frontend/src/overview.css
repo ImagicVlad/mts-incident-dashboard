@@ -63,6 +63,28 @@
   .account-panel h2 { margin-bottom: 4px; }
   .account-panel p { color: var(--muted); font-size: .85rem; }
   .account-login { margin-top: 12px; font-family: var(--mono); }
+  .generator-control {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    width: 100%; margin-top: 16px; padding: 11px 0;
+    border: 0; border-block-start: 1px solid var(--line); background: transparent;
+    color: inherit; font: inherit; text-align: start; cursor: pointer;
+  }
+  .generator-copy { display: grid; gap: 3px; }
+  .generator-copy strong { font-size: .88rem; font-weight: 600; }
+  .generator-copy small { color: var(--muted); font-size: .77rem; }
+  .generator-switch {
+    display: flex; align-items: center; flex: none; width: 32px; height: 19px; padding: 3px;
+    border-radius: 20px; background: #858d99;
+  }
+  .generator-switch::before { content: ""; width: 13px; height: 13px; border-radius: 50%; background: #fff; }
+  .generator-control[aria-checked="true"] .generator-switch { background: var(--red); }
+  .generator-control[aria-checked="true"] .generator-switch::before { transform: translateX(13px); }
+  .generator-control:enabled:hover .generator-switch { box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 10%, transparent); }
+  @media (prefers-reduced-motion: no-preference) {
+    .generator-switch, .generator-switch::before { transition: background-color .15s, transform .15s; }
+  }
+  .account-panel .generator-error { color: var(--rose, #ac3440); }
+  .account-panel .logout { margin-top: 5px; }
   .logout { display: block; padding: 10px; margin-top: 16px; background: #d8192a; color: white; text-align: center; border-radius: 8px; font-size: .9rem; font-weight: 600; }
   .logout:hover { background: #b61423; }
   @media (max-width: 1000px) {

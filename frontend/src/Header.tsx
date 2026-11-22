@@ -2,6 +2,7 @@ import { lazy, Suspense, useState } from 'react';
 import { Link, useMatch, useNavigate } from 'react-router-dom';
 import { Bell, CircleAlert, Moon, Radio, Search, Sun, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, errorText, pathFor, type Account } from './api';
 import { useLive } from './live';
 import { Popover, PopoverContent, PopoverTrigger } from './components/ui/popover';
@@ -14,6 +15,38 @@ const RelationWindow = lazy(async () => {
   const { RelationWindow } = await import('./filters/RelationWindow');
   return {default: RelationWindow};
 });
+
+const generatorKey = ['incident-generator'] as const;
+type GeneratorState = {enabled: boolean};
+
+function GeneratorControl() {
+  const cache = useQueryClient();
+  const toggle = useMutation({
+    mutationFn: (enabled: boolean) => api<GeneratorState>('generator', {enabled}),
+    onMutate: () => cache.cancelQueries({queryKey: generatorKey}),
+    onSuccess: state => cache.setQueryData(generatorKey, state),
+    onSettled: () => cache.invalidateQueries({queryKey: generatorKey}),
+  });
+  const status = useQuery({
+    queryKey: generatorKey,
+    queryFn: ({signal}) => api<GeneratorState>('generator', undefined, signal),
+    refetchOnMount: 'always',
+    refetchInterval: toggle.isPending ? false : 5000,
+  });
+  const enabled = status.data?.enabled ?? false;
+  return <>
+    <button type="button" className="generator-control" role="switch" aria-checked={enabled}
+      aria-labelledby="generator-label" aria-describedby="generator-hint"
+      disabled={!status.data || toggle.isPending} onClick={() => toggle.mutate(!enabled)}>
+      <span className="generator-copy"><strong id="generator-label">Автогенерация инцидентов</strong>
+        <small id="generator-hint">{status.isPending ? 'Проверяем состояние…' : 'По одному каждые 25–60 секунд'}</small></span>
+      <span className="generator-switch" aria-hidden="true"/>
+    </button>
+    {(toggle.isError || status.isError) && <p className="generator-error form-error" role="alert">
+      {errorText(toggle.error ?? status.error)}
+    </p>}
+  </>;
+}
 
 export function Header({user}: {user:Account}) {
   const [dark, setDark] = useState(() => document.documentElement.dataset.theme === 'dark');
@@ -55,6 +88,7 @@ export function Header({user}: {user:Account}) {
       <NotificationBell key={user.login} login={user.login}/>
       <Popover><PopoverTrigger asChild><button className="account-trigger" aria-label="Аккаунт">{user.displayName.split(/\s+/).map(t=>t[0]).slice(0,2).join('').toUpperCase()}</button></PopoverTrigger>
         <PopoverContent aria-label="Аккаунт" className="account-panel"><h2>{user.displayName}</h2><p>Координатор</p><p className="account-login">{user.login}</p>
+          <GeneratorControl/>
           {error && <p role="alert" className="form-error">{error}</p>}
           <button className="logout" onClick={async()=>{try {await api('auth/logout',{}); window.dispatchEvent(new Event('session-expired')); navigate('/login',{replace:true});} catch(e){setError(errorText(e));}}}>Выйти из аккаунта</button>
         </PopoverContent></Popover>

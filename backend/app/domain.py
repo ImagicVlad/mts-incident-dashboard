@@ -124,7 +124,7 @@ def normalize_date(value: str | None, field: str, diagnostics: list[str]) -> str
 
 
 def itsm_link(template: str, record: RawIncident) -> str | None:
-    if not template or record.dataOrigin == "defense-scenario":
+    if not template or record.dataOrigin in {"defense-scenario", "auto-generated"}:
         return None
     try:
         values = {"id": record.id, "sysId": record.sysId}
