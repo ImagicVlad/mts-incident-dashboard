@@ -1,12 +1,13 @@
 import { lazy, Suspense, useState } from 'react';
 import { Link, useMatch, useNavigate } from 'react-router-dom';
-import { Bell, CircleAlert, Moon, Radio, Search, Sun, X } from 'lucide-react';
+import { CircleAlert, Moon, Radio, Search, Sun, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, errorText, pathFor, type Account } from './api';
 import { useLive } from './live';
 import { Popover, PopoverContent, PopoverTrigger } from './components/ui/popover';
 import { NotificationBell } from './NotificationBell';
+import { NoticeContent } from './NoticeContent';
 import { useViews } from './filters/ViewContext';
 import { FilterTools } from './filters/FilterTools';
 import { matchesSearch } from './filters/incidentViews';
@@ -48,6 +49,19 @@ function GeneratorControl() {
   </>;
 }
 
+function observeHeader(header: HTMLElement | null) {
+  if (!header) return;
+  const style = document.documentElement.style;
+  const measure = () => style.setProperty('--notice-header-height', header.getBoundingClientRect().height + 'px');
+  measure();
+  const observer = new ResizeObserver(measure);
+  observer.observe(header);
+  return () => {
+    observer.disconnect();
+    style.removeProperty('--notice-header-height');
+  };
+}
+
 export function Header({user}: {user:Account}) {
   const [dark, setDark] = useState(() => document.documentElement.dataset.theme === 'dark');
   const themeLabel = dark ? 'Светлая тема' : 'Тёмная тема';
@@ -67,7 +81,7 @@ export function Header({user}: {user:Account}) {
   const navigate = useNavigate();
   const term = query.trim().toLocaleLowerCase('ru');
   const found = !term ? [] : onDashboard ? view.result.items : (snapshot?.incidents || []).filter(i=>matchesSearch(i,term));
-  return <><header className="topbar dashboard-bar"><div className="bar-inner dashboard-nav">
+  return <><header ref={observeHeader} className="topbar dashboard-bar"><div className="bar-inner dashboard-nav">
     <Link className="mts-mark" to="/dashboard" aria-label="МТС — на дашборд">
       <img src="/mts-logo.svg" width="40" height="40" alt=""/><span>МТС</span>
     </Link>
@@ -108,11 +122,16 @@ export function LiveStatus() {
   </div>;
 }
 export function Toasts() {
-  const {toasts,dismiss} = useLive();
+  const {toasts, dismiss, snapshot, formats, now} = useLive();
   const reduced = useReducedMotion();
+  const today = formats.dateFormat.format(now);
   return <div className="toasts" aria-live="polite"><AnimatePresence>{toasts.map(n=>
-    <motion.div key={n.eventId} initial={{opacity:0,y:reduced?0:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:reduced?0:4}} transition={{duration:reduced?0:0.22}} className="toast">
-      <Bell size={17}/><Link to={pathFor(n.incidentId)} onClick={()=>dismiss(n.eventId)}><strong>{n.label}</strong><span>{n.incidentId}</span></Link>
+    <motion.div key={n.eventId} className="toast" data-kind={n.kind}
+      initial={{opacity:0, y:reduced ? 0 : -14}} animate={{opacity:1,y:0}} exit={{opacity:0, y:reduced ? 0 : -6}}
+      transition={{duration:reduced ? 0 : .22, ease:'easeOut'}}>
+      <Link to={pathFor(n.incidentId)} onClick={()=>dismiss(n.eventId)}>
+        <NoticeContent event={n} title={snapshot?.incidents.find(i => i.id === n.incidentId)?.header} today={today} formats={formats}/>
+      </Link>
       <button aria-label="Закрыть оповещение" onClick={()=>dismiss(n.eventId)}><X size={16}/></button>
     </motion.div>)}</AnimatePresence></div>;
 }

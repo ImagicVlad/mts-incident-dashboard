@@ -44,9 +44,7 @@
   .result-link { display: grid; gap: 4px; padding: 10px; border-radius: 8px; font-size: .85rem; line-height: 1.35; }
   .result-link:hover, .result-link:focus-visible { background: #f4f5f7; }
   .search-results .result-link:hover, .search-results .result-link:focus-visible { background: #fff1f3; }
-  .result-meta, .event-line time { color: var(--muted); font: .75rem var(--mono); }
-  .event-line { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-  .event-line strong { color: var(--attention); }
+  .result-meta { color: var(--muted); font: .75rem var(--mono); }
   .empty-result { margin: 0; padding: 10px; color: var(--muted); font-size: .85rem; }
   .dashboard-actions button { display: grid; place-items: center; width: 40px; height: 40px; padding: 0; cursor: pointer; font: inherit; border-radius: 50%; }
   .bell-trigger { position: relative; border: 1px solid var(--line); background: white; color: #323944; }
@@ -244,7 +242,7 @@
 
   @media (min-width: 761px) {
     .rail {
-      margin-top: calc(1.566rem + 13px);
+      margin-top: var(--first-incident-offset, 0px);
     }
     .work-grid:has(.chat-dock:empty) { grid-template-columns: minmax(0,1fr); grid-template-areas: "side" "queue"; }
     .work-grid:has(.chat-dock:empty) .queue { grid-area: queue; }

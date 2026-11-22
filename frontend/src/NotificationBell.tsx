@@ -1,14 +1,17 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bell } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { pathFor } from './api';
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from './components/ui/popover';
 import { useLive } from './live';
+import { NoticeContent } from './NoticeContent';
 
 const visibleNoticeCount = 3;
 
 export function NotificationBell({login}: {login: string}) {
-  const {snapshot, formats: {stamp}} = useLive();
+  const {snapshot, formats, now} = useLive();
+  const titles = useMemo(() => new Map(snapshot?.incidents.map(i => [i.id, i.header])), [snapshot?.incidents]);
+  const today = formats.dateFormat.format(now);
   const events = snapshot?.notifications ?? [];
   const newest = events[0]?.eventId;
   const key = 'mts.notifications.seen.' + login;
@@ -58,9 +61,8 @@ export function NotificationBell({login}: {login: string}) {
       <h2>Оповещения</h2>
       {!events.length && <p className="empty-result">Новых оповещений пока нет</p>}
       {events.length > 0 && <div className="notification-feed" ref={sizeFeed}>
-        {events.map(n => <PopoverClose asChild key={n.eventId}><Link className="result-link" to={pathFor(n.incidentId)}>
-          <span className="event-line"><strong>{n.label}</strong></span>
-          <span className="result-meta">{n.incidentId} · {stamp(n.time)}</span>
+        {events.map(n => <PopoverClose asChild key={n.eventId}><Link className="result-link" data-kind={n.kind} to={pathFor(n.incidentId)}>
+          <NoticeContent event={n} title={titles.get(n.incidentId)} today={today} formats={formats}/>
         </Link></PopoverClose>)}
       </div>}
     </PopoverContent>

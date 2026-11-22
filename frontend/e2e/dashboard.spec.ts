@@ -227,13 +227,22 @@ test('плашки подсвечиваются только при поступ
 
 test('срочные события всплывают один раз, просмотр ленты снимает точку', async ({page}) => {
   const original = await readFile(file, 'utf8');
-  const issue = {id: 'NOTICE-1', stateEnum: 'Assigned', priorityId: 2, assignedGroupName: '', deadline: ''};
+  const issue = {id: 'NOTICE-1', header: 'Не проходят звонки в контактный центр',
+    stateEnum: 'Assigned', priorityId: 2, assignedGroupName: '', deadline: ''};
   const records = JSON.parse(original);
   const publish = () => replace(JSON.stringify([...records, issue]));
   const bell = page.getByRole('button', {name: /^Оповещения/});
   const dot = bell.locator('i');
   const panel = page.locator('.notifications-panel');
   const toast = page.locator('.toast').filter({hasText: issue.id});
+  const expectToastBelowHeader = async () => {
+    await expect.poll(() => toast.evaluate(element => {
+      const box = element.getBoundingClientRect();
+      const headerBottom = document.querySelector('.dashboard-bar')!.getBoundingClientRect().bottom;
+      const gap = box.top - headerBottom;
+      return gap >= 0 && gap <= 28 && box.left >= 0 && box.right <= window.innerWidth;
+    })).toBe(true);
+  };
   try {
     await publish();
     await page.goto('/login');
@@ -248,7 +257,12 @@ test('срочные события всплывают один раз, прос
     Object.assign(issue, {priorityId: 4, assignedGroupName: 'КЦ ИТ Координаторы Массовых Инцидентов'});
     await publish();
     await expect(toast).toHaveCount(1);
-    await expect(toast).toContainText('Критический инцидент поступил координаторам');
+    await expect(toast).toHaveAttribute('data-kind', 'critical_assigned');
+    await expect(toast.locator('.notice-label')).toHaveText('Критический инцидент поступил координаторам');
+    await expect(toast.locator('.notice-title')).toHaveText(issue.header);
+    await expect(toast.locator('time')).toHaveAttribute('datetime', /\d{4}-\d{2}-\d{2}T/);
+    await expect(toast.getByRole('link')).toHaveAttribute('href', '/incidents/' + issue.id);
+    await expectToastBelowHeader();
     await expect(dot).toBeVisible();
     await toast.getByRole('button').click();
     await expect(dot).toBeVisible();
@@ -260,9 +274,12 @@ test('срочные события всплывают один раз, прос
     await expect(bell).toBeVisible();
     await expect(dot).toHaveCount(0);
 
+    await page.setViewportSize({width:320, height:800});
     issue.deadline = new Date(Date.now() - 1000).toISOString();
     await publish();
     await expect(toast).toContainText('Нарушен срок SLA');
+    await expect(toast).toHaveAttribute('data-kind', 'overdue');
+    await expectToastBelowHeader();
     await toast.getByRole('button').click();
     issue.stateEnum = 'Research';
     await publish();
@@ -274,6 +291,12 @@ test('срочные события всплывают один раз, прос
     await publish();
     await expect(issueEvents.filter({hasText: 'Инцидент решён'})).toBeVisible();
     await expect(issueEvents).toHaveCount(4);
+    expect(await issueEvents.evaluateAll(rows => rows.map(row => row.getAttribute('data-kind'))))
+      .toEqual(['resolved','research','overdue','critical_assigned']);
+    expect(await issueEvents.locator('.notice-title').allTextContents()).toEqual(Array(4).fill(issue.header));
+    const glyphs = issueEvents.locator('.notice-glyph');
+    const colors = await glyphs.evaluateAll(nodes => nodes.map(node => getComputedStyle(node).color));
+    expect(new Set(colors).size).toBe(4);
     const feed = panel.locator('.notification-feed');
     for (const width of [1280, 320]) {
       await page.setViewportSize({width, height: 800});
@@ -290,6 +313,9 @@ test('срочные события всплывают один раз, прос
     await page.keyboard.press('Escape');
     await bell.click();
     await expect.poll(() => feed.evaluate(list => list.scrollTop)).toBe(0);
+    // The journal outlives the incident in the source. Its ID still identifies the event.
+    await replace(JSON.stringify(records));
+    await expect(issueEvents.first().locator('.notice-title')).toHaveText(issue.id);
     await page.keyboard.press('Escape');
     await expect(dot).toHaveCount(0);
     await expect(toast).toHaveCount(0);

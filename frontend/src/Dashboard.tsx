@@ -76,6 +76,24 @@ function GroupGlow({arrival}: {arrival?: string}) {
   return <span key={arrival} className="metric-arrival" aria-hidden="true"/>;
 }
 
+function alignDeadlineRail(list: HTMLDivElement | null) {
+  const queue = list?.closest<HTMLElement>('.queue');
+  if (!list || !queue || !queue.parentElement) return;
+  const grid = queue.parentElement;
+  const measure = () => {
+    const offset = list.getBoundingClientRect().top - queue.getBoundingClientRect().top;
+    grid.style.setProperty('--first-incident-offset', `${offset}px`);
+  };
+  measure();
+  const observer = new ResizeObserver(measure);
+  observer.observe(queue);
+  queue.querySelectorAll('.group, .section-head, .active-filters').forEach(el => observer.observe(el));
+  return () => {
+    observer.disconnect();
+    grid.style.removeProperty('--first-incident-offset');
+  };
+}
+
 export function Dashboard() {
   const {setChatDock} = useOutletContext<ConsoleOutlet>();
   const {snapshot,now,newCards,groupArrivals,bootstrapError} = useLive();
@@ -87,6 +105,7 @@ export function Dashboard() {
   const filtered = Boolean(settings.deadlineList || query.trim() || settings.groups.length || settings.noOwner || settings.sla!=='any' || settings.created!=='any'
     || settings.queueTime!=='any' || facetKeys.some(k=>settings.choices[k].length));
   const visibleSections = sections.filter(s=>!settings.groups.length || settings.groups.includes(s.id));
+  const firstList = visibleSections.find(section => result.groups[section.id].length)?.id ?? visibleSections[0]?.id;
   const counter = (id:GroupId) => <span className={'count'+(filtered?' filtered-count':'')}>{filtered?result.groups[id].length+' из '+snapshot.counts[id]:snapshot.counts[id]}</span>;
   const onCoordinators = new Set(snapshot.groups.assigned);
   const priorityById = new Map<string, PriorityQueue>();
@@ -115,7 +134,7 @@ export function Dashboard() {
       <h2 id={'heading-'+id} className="section-head"><button className="category-toggle" type="button" aria-expanded={!!expanded[id]} aria-controls={'list-'+id} onClick={()=>setExpanded(prev=>({...prev,[id]:!prev[id]}))}>
         <span className="category-caption"><span className="category-name">{name}</span>{counter(id)}</span>
         <ChevronDown size={16}/></button></h2>
-      <div id={'list-'+id} className="incident-list">{shown.map(key=>{
+      <div id={'list-'+id} className="incident-list" ref={id === firstList ? alignDeadlineRail : undefined}>{shown.map(key=>{
         const item=index.byId.get(key)?.item;
         return item && renderCard(item,id);
       })}
@@ -135,7 +154,7 @@ export function Dashboard() {
       {settings.deadlineList ? <section className="group" data-testid="deadline-results" aria-labelledby="deadline-results-heading">
         <h2 id="deadline-results-heading" className="section-head" ref={deadlineHeading} tabIndex={-1}>Инциденты со сроком решения</h2>
         <ActiveFilters/>
-        <div className="incident-list">{result.items.map(item=>renderCard(item))}
+        <div className="incident-list" ref={alignDeadlineRail}>{result.items.map(item=>renderCard(item))}
           {!result.count && <p className="queue-empty">По выбранным условиям нет активных инцидентов со сроком решения.</p>}
         </div>
       </section> : visibleSections.map(g=>renderGroup(g.id,g.name))}

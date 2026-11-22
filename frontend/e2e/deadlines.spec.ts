@@ -80,6 +80,29 @@ async function expectList(page: Page, ids: string[]) {
     .toEqual(ids.map(id => '/incidents/' + id));
 }
 
+test('верх таймера совпадает с первой карточкой при смене очереди и фильтров', async ({page, source}) => {
+  const higher = source.issue('ALIGN-HIGH', 180, {priorityId:3, priority:'Высокий', assignedGroupName:'Сеть'});
+  await source.update([higher]);
+  await page.setViewportSize({width:1200, height:900});
+  await login(page);
+  const widget = page.locator('.deadline-focus');
+  const first = page.locator('.queue a.incident').first();
+  async function expectAligned(id: string) {
+    await expect(first).toHaveAttribute('data-incident-id', id);
+    await expect.poll(async () => {
+      const [card, timer] = await Promise.all([first.boundingBox(), widget.boundingBox()]);
+      return card && timer ? Math.abs(card.y - timer.y) : Infinity;
+    }).toBeLessThanOrEqual(1);
+  }
+  await expectAligned(higher.id);
+  const critical = source.issue('ALIGN-CRITICAL', 15);
+  await source.update([higher, critical]);
+  await expectAligned(critical.id);
+  await widget.locator('.deadline-all').click();
+  await page.setViewportSize({width:800, height:900});
+  await expectAligned(critical.id);
+});
+
 for (const width of [375, 1440]) {
   test(`заголовок таймера занимает одну строку и открывает инцидент при ширине ${width}px`, async ({page, source}) => {
     await page.setViewportSize({width, height: 900});
