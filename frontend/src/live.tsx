@@ -5,6 +5,7 @@ import { api, ApiError, displayFormats, type Account, type Notice, type Snapshot
 type LinkState = 'connecting' | 'online' | 'reconnecting';
 interface Live {
   snapshot?: Snapshot; link: LinkState; now: number; bootstrapError: boolean;
+  applyAssignment: (snapshot: Snapshot) => void;
   toasts: Notice[]; dismiss: (id: string) => void; newCards: Set<string>;
   formats: ReturnType<typeof displayFormats>; aiConfigured?: boolean;
 }
@@ -25,6 +26,7 @@ export function LiveProvider({children}: {children: ReactNode}) {
   const [newCards,setNewCards] = useState<Set<string>>(new Set());
   const clock = useRef({server:Date.now(), sample:performance.now()});
   const [now,setNow] = useState(Date.now);
+  const assignmentUpdate = useRef<(snapshot: Snapshot) => void>(()=>{});
 
   useEffect(() => {
     let closed = false, receivedStream = false, baseline = true;
@@ -34,11 +36,12 @@ export function LiveProvider({children}: {children: ReactNode}) {
       const timer = window.setTimeout(() => {timers.delete(timer); fn();}, ms);
       timers.add(timer);
     };
-    const accept = (data: Snapshot, isLive: boolean) => {
-      if (closed || (!isLive && receivedStream)) return;
+    const accept = (data: Snapshot, source: 'initial' | 'stream' | 'assignment') => {
+      if (closed || (source==='initial' && receivedStream)) return;
+      if (source==='assignment' && previous && previous.epoch!==data.epoch) return;
       if (previous?.epoch === data.epoch && data.snapshotVersion < previous.snapshotVersion) return;
       const sameRun = previous?.epoch === data.epoch;
-      if (isLive && previous && sameRun && !baseline) {
+      if (source!=='initial' && previous && sameRun && !baseline) {
         const oldIds = new Set(previous.notifications.map(n => n.eventId));
         const added = data.notifications.filter(n =>
           !oldIds.has(n.eventId) && n.kind !== 'research' && n.kind !== 'resolved');
@@ -58,7 +61,7 @@ export function LiveProvider({children}: {children: ReactNode}) {
       } else if (!sameRun) {
         setToasts([]); setNewCards(new Set());
       }
-      if (isLive) { receivedStream = true; baseline = false; setLink('online'); }
+      if (source==='stream') { receivedStream = true; baseline = false; setLink('online'); }
       clock.current = {server:Date.parse(data.serverTime), sample:performance.now()};
       setNow(clock.current.server);
       setBootstrapError(false);
@@ -66,11 +69,12 @@ export function LiveProvider({children}: {children: ReactNode}) {
       client.setQueryData(['live'], data);
     };
     const controller = new AbortController();
-    api<Snapshot>('incidents', undefined, controller.signal).then(data => accept(data, false)).catch(() => {
+    assignmentUpdate.current = data => accept(data, 'assignment');
+    api<Snapshot>('incidents', undefined, controller.signal).then(data => accept(data, 'initial')).catch(() => {
       if (!closed && !receivedStream) setBootstrapError(true);
     });
     const stream = new EventSource('/api/incidents/events');
-    stream.addEventListener('snapshot', (e: MessageEvent<string>) => accept(JSON.parse(e.data), true));
+    stream.addEventListener('snapshot', (e: MessageEvent<string>) => accept(JSON.parse(e.data), 'stream'));
     stream.onerror = () => {
       if (closed) return;
       baseline = true; setLink('reconnecting');
@@ -83,6 +87,6 @@ export function LiveProvider({children}: {children: ReactNode}) {
       closed = true; stream.close(); controller.abort(); clearInterval(ticker); timers.forEach(clearTimeout);
     };
   }, [client]);
-  return <Context.Provider value={{snapshot,link,now,bootstrapError,toasts,newCards,formats,aiConfigured:settings?.aiConfigured,
+  return <Context.Provider value={{snapshot,link,now,bootstrapError,toasts,newCards,formats,applyAssignment:data=>assignmentUpdate.current(data),aiConfigured:settings?.aiConfigured,
     dismiss:id => setToasts(old => old.filter(n => n.eventId !== id))}}>{children}</Context.Provider>;
 }

@@ -8,6 +8,37 @@ async function replace(contents: string) {
   await rename(file + '.writing', file);
 }
 
+test('передача активного инцидента обновляет детали и дашборд даже при задержке SSE в карточке', async ({page}) => {
+  const original = await readFile(file, 'utf8');
+  const issue = {id:'TEST-HANDOFF', stateEnum:'Assigned', state:'Назначен', priorityId:4,
+    assignedGroupName:'КЦ ИТ Координаторы Массовых Инцидентов', lastAssignmentToTeamDateTime:new Date().toISOString()};
+  try {
+    await replace(JSON.stringify([issue, {id:'TEAM-DIRECTORY', stateEnum:'Closed', assignedGroupName:'Сервис платежей'}]));
+    await page.goto('/login');
+    await page.getByRole('button', {name:'Войти',exact:true}).click();
+    const card = page.getByTestId('group-critical').locator('[data-incident-id="TEST-HANDOFF"]');
+    await expect(card).toContainText('У координаторов с');
+    const detail = await page.context().newPage();
+    await detail.route('**/api/incidents/events', route=>route.abort());
+    await detail.goto('/incidents/'+issue.id);
+    await detail.getByRole('button',{name:'Назначить команду'}).click();
+    await detail.getByRole('button',{name:'Профильная команда'}).click();
+    await detail.getByRole('option',{name:'Сервис платежей'}).click();
+    await detail.getByRole('button',{name:'Передать команде'}).click();
+    await expect(detail.locator('.record-label .pill')).toHaveText('Назначен команде');
+    await expect(detail.locator('.facts')).toContainText('Сервис платежей');
+    await expect(detail.locator('.facts')).toContainText('Время назначения команде');
+    await expect(detail.locator('.facts')).not.toContainText('Следующий шаг');
+    await expect(detail.getByRole('button',{name:'Назначить команду'})).toHaveCount(0);
+    await expect(card.locator('.pill')).toHaveText('Назначен команде');
+    await expect(card).toContainText('Сервис платежей');
+    await expect(card.locator('.coordinator-since')).toHaveCount(0);
+    await expect(page.getByTestId('group-assigned').locator('.incident')).toHaveCount(0);
+    await detail.getByRole('navigation',{name:'Путь'}).getByRole('link',{name:'Дашборд'}).click();
+    await expect(detail.getByTestId('group-critical').locator('.pill')).toHaveText('Назначен команде');
+  } finally { await replace(original); }
+});
+
 test('срочные события всплывают один раз, просмотр ленты снимает точку', async ({page}) => {
   const original = await readFile(file, 'utf8');
   const issue = {id: 'NOTICE-1', stateEnum: 'Assigned', priorityId: 2, assignedGroupName: '', deadline: ''};

@@ -149,10 +149,13 @@ def create_app(settings: Settings | None = None, *, provider_transport=None) -> 
     async def incident(incident_id: str, request: Request, token: CurrentSession):
         return incident_by_id(request.app.state.store.snapshot(), incident_id)
 
-    @app.post("/api/incidents/{incident_id}/assignment", response_model=Incident, tags=["incidents"])
-    async def assign(incident_id: str, body: Assignment, request: Request, token: CurrentSession):
+    @app.post("/api/incidents/{incident_id}/assignment", response_model=Snapshot | Incident, tags=["incidents"])
+    async def assign(incident_id: str, body: Assignment, request: Request, token: CurrentSession,
+                     includeSnapshot: bool = False):
         try:
-            return await request.app.state.store.assign(incident_id, body.team, body.employee, body.expectedEmployee, body.expectedTime)
+            store = request.app.state.store
+            updated = await store.assign(incident_id, body.team, body.employee, body.expectedEmployee, body.expectedTime)
+            return store.snapshot() if includeSnapshot else updated
         except AssignmentConflict as exc:
             raise HTTPException(409, str(exc)) from exc
         except (OSError, ValueError) as exc:

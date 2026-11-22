@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ChevronLeft, CornerUpRight, ExternalLink } from 'lucide-react';
 import { FilterPicker } from './filters/FilterTools';
-import { active, api, errorText, finished, remaining, type Incident } from './api';
-import { Pill } from './Dashboard';
+import { active, api, errorText, finished, remaining, type Incident, type Snapshot } from './api';
+import { overviewStatus, Pill } from './Dashboard';
 import { Summary } from './Intelligence';
 import { useLive } from './live';
 
@@ -18,6 +18,7 @@ function observeDataHeight(paper: HTMLElement | null) {
 }
 
 function Assignment({item, incidents}: {item: Incident; incidents: Incident[]}) {
+  const {applyAssignment} = useLive();
   const [open, setOpen] = useState(false);
   const [team, setTeam] = useState('');
   const [employee, setEmployee] = useState('');
@@ -33,8 +34,9 @@ function Assignment({item, incidents}: {item: Incident; incidents: Incident[]}) 
     event.preventDefault();
     setPending(true); setError('');
     try {
-      await api('incidents/'+encodeURIComponent(item.id)+'/assignment', {team, employee:employee || null,
+      const updated = await api<Snapshot>('incidents/'+encodeURIComponent(item.id)+'/assignment?includeSnapshot=true', {team, employee:employee || null,
         expectedEmployee:item.assignedEmployee, expectedTime:item.lastAssignmentToTeamDateTime});
+      applyAssignment(updated);
       setOpen(false);
     } catch (err) {setError(errorText(err));}
     finally {setPending(false);}
@@ -72,7 +74,9 @@ export function Details() {
     ['Продукт',item.productName],['Сервис',item.service],['Приоритет',item.priority],
     [onCoordinators ? 'Профильная команда' : 'Команда назначения',onCoordinators ? 'Ещё не назначена' : item.assignedGroupName],
     [onCoordinators ? 'Координатор' : 'Исполнитель',item.assignedEmployee],
-    ...(snapshot?.groups.assigned.includes(item.id) ? [['Следующий шаг', research
+    ...(!onCoordinators && (active(item) || research) && item.assignedGroupName && item.lastAssignmentToTeamDateTime
+      ? [['Время назначения команде',stamp(item.lastAssignmentToTeamDateTime)]] : []),
+    ...(onCoordinators ? [['Следующий шаг', research
       ? 'Передать разбор причин профильной команде' : 'Передать инцидент профильной команде']] : []),
     ['Время возникновения',stamp(item.submitDate)], ['Плановый срок устранения',stamp(item.deadline)],
     ...(item.completionDate?[['Завершение по данным источника',stamp(item.completionDate)]]:[]),
@@ -81,7 +85,7 @@ export function Details() {
   return <main className="container record-page"><nav className="crumb" aria-label="Путь"><Link to="/dashboard"><ChevronLeft size={15}/> Дашборд</Link><span>/</span>{item.id}</nav>
     <article className="record default-record"><h1>{item.header || 'Без заголовка'}</h1>
     <div className="record-grid"><section className="paper" ref={observeDataHeight}>
-      <header className="paper-heading"><h2>Данные инцидента</h2><div className="record-label"><span className="mono">{item.id}</span><Pill item={item}/></div></header>
+      <header className="paper-heading"><h2>Данные инцидента</h2><div className="record-label"><span className="mono">{item.id}</span><Pill item={item} label={active(item) ? overviewStatus(item,Boolean(onCoordinators)) : undefined}/></div></header>
       <dl className="facts">{rows.map(([name,value])=><div key={name}><dt>{name}</dt><dd>{value || 'Не указан'}</dd></div>)}</dl>
       <section className="record-text"><h3>Описание</h3><p>{description || 'Описание отсутствует.'}</p></section>
       {item.solution && <section className="record-text"><h3>Решение из источника</h3><p>{item.solution}</p></section>}

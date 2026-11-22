@@ -15,7 +15,7 @@ const sections = [
   {id:'assigned',name:'На координаторах',note:'Следующий шаг — передача профильной команде',tone:'blue',icon:'users-group'},
   {id:'review',name:'Исследование',note:'Сбой устранён, идёт разбор причин',tone:'violet',icon:'file-search'},
 ] as const;
-function overviewStatus(item: Incident, onCoordinators: boolean) {
+export function overviewStatus(item: Incident, onCoordinators: boolean) {
   switch (item.stateEnum) {
     case 'Assigned':
       if (onCoordinators) return 'Назначен координаторам';
