@@ -1,9 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { active, finished, pathFor, remaining, type GroupId, type Incident } from './api';
 import { useLive } from './live';
+import { DeadlineFocus } from './DeadlineFocus';
+import { ActiveFilters } from './filters/FilterTools';
+import { useViews } from './filters/ViewContext';
+import { facetKeys } from './filters/incidentViews';
 
 const sections = [
   {id:'critical',name:'Критические',note:'Наивысший приоритет или высокий с истекающим либо нарушенным сроком',tone:'red',icon:'alert-triangle'},
@@ -29,7 +33,7 @@ export function Pill({item,label}:{item:Incident;label?:string}) {
   return <span className={'pill '+tone} title={label && label!==source ? source : undefined}>{label ?? source}</span>;
 }
 type PriorityQueue = 'high' | 'critical';
-function Card({item,group,now,animate,priority,onCoordinators}:{item:Incident;group:GroupId;now:number;animate:boolean;priority?:PriorityQueue;onCoordinators:boolean}) {
+function Card({item,group,now,animate,priority,onCoordinators}:{item:Incident;group?:GroupId;now:number;animate:boolean;priority?:PriorityQueue;onCoordinators:boolean}) {
   const {formats:{stamp}} = useLive();
   const reduced = useReducedMotion();
   const countdown = active(item) ? remaining(item.deadline,now) : null;
@@ -63,46 +67,70 @@ function Card({item,group,now,animate,priority,onCoordinators}:{item:Incident;gr
 }
 export function Dashboard() {
   const setChatDock = useOutletContext<(node: HTMLDivElement | null) => void>();
-  const {snapshot,now,newCards,bootstrapError,formats:{stamp,zoneLabel}} = useLive();
+  const {snapshot,now,newCards,bootstrapError} = useLive();
+  const {settings,query,result,index,clearFilters,patch,reset}=useViews();
+  const deadlineHeading = useRef<HTMLHeadingElement>(null);
   const [expanded,setExpanded] = useState<Partial<Record<GroupId,boolean>>>({});
   useEffect(()=>{document.title='Дашборд инцидентов · МТС';},[]);
   if (!snapshot?.hasSnapshot) return <main className="container waiting"><h1>Дашборд инцидентов</h1><p role="status">{bootstrapError || snapshot?.sourceStatus==='error' ? 'Данные недоступны' : 'Загружаем инциденты…'}</p></main>;
-  const byId = new Map(snapshot.incidents.map(i=>[i.id,i]));
+  const filtered = Boolean(settings.deadlineList || query.trim() || settings.groups.length || settings.noOwner || settings.sla!=='any' || settings.created!=='any'
+    || settings.queueTime!=='any' || facetKeys.some(k=>settings.choices[k].length));
+  const visibleSections = sections.filter(s=>!settings.groups.length || settings.groups.includes(s.id));
+  const counter = (id:GroupId) => <span className={'count'+(filtered?' filtered-count':'')}>{filtered?result.groups[id].length+' из '+snapshot.counts[id]:snapshot.counts[id]}</span>;
   const onCoordinators = new Set(snapshot.groups.assigned);
   const priorityById = new Map<string, PriorityQueue>();
   for (const queue of ['high', 'critical'] as const) {
     for (const id of snapshot.groups[queue]) priorityById.set(id, queue);
   }
-  const entries = snapshot.incidents.filter(i=>active(i) && i.deadline && Number.isFinite(Date.parse(i.deadline))).sort((a,b)=>Date.parse(a.deadline!)-Date.parse(b.deadline!));
-  const nearest = entries.find(i=>Date.parse(i.deadline!)>=now) ?? entries.at(-1);
-  const nextClock = nearest && remaining(nearest.deadline,now);
+  function toggleAllDeadlines() {
+    if (settings.deadlineList) {
+      reset();
+      return;
+    }
+    patch({deadlineList:{sort:[]}});
+    requestAnimationFrame(() => {
+      deadlineHeading.current?.focus({preventScroll:true});
+      deadlineHeading.current?.scrollIntoView({block:'start',behavior:'instant'});
+    });
+  }
+  function renderCard(item: Incident, group?: GroupId) {
+    return <Card key={item.id} item={item} group={group} priority={priorityById.get(item.id)} now={now}
+      onCoordinators={onCoordinators.has(item.id)} animate={!!group && newCards.has(group+'/'+item.id)}/>;
+  }
   const renderGroup = (id:GroupId,name:string) => {
-    const ids = snapshot.groups[id];
+    const ids = result.groups[id];
     const shown = expanded[id]?ids:ids.slice(0,2);
     return <section className={'group '+(id==='history'?'history':'')} key={id} id={id} data-testid={'group-'+id} aria-labelledby={'heading-'+id}>
       <h2 id={'heading-'+id} className="section-head"><button className="category-toggle" type="button" aria-expanded={!!expanded[id]} aria-controls={'list-'+id} onClick={()=>setExpanded(prev=>({...prev,[id]:!prev[id]}))}>
-        <span className="category-caption"><span className="category-name">{name}</span><span className="count">{ids.length}</span></span>
+        <span className="category-caption"><span className="category-name">{name}</span>{counter(id)}</span>
         <ChevronDown size={16}/></button></h2>
       <div id={'list-'+id} className="incident-list">{shown.map(key=>{
-        const item=byId.get(key);
-        return item && <Card key={key} item={item} group={id} priority={priorityById.get(key)} onCoordinators={onCoordinators.has(key)} now={now} animate={newCards.has(id+'/'+key)}/>;
+        const item=index.byId.get(key)?.item;
+        return item && renderCard(item,id);
       })}
-      {!ids.length && <p className="queue-empty">{id==='history'?'Завершённых инцидентов пока нет.':'В этой категории нет инцидентов.'}</p>}</div>
+      {!ids.length && <p className="queue-empty">{snapshot.counts[id]>0 && filtered
+        ? <>По выбранным условиям совпадений нет. <button className="filter-text" onClick={clearFilters}>Сбросить условия</button></>
+        : id==='history'?'Завершённых инцидентов пока нет.':'В этой категории нет инцидентов.'}</p>}</div>
     </section>;
   };
   return <main className="container overview">
     <div className="page-intro"><h1>Дашборд инцидентов</h1></div>
-    <nav className="metrics" aria-label="Группы инцидентов">{sections.map(g=><a className={'metric '+g.tone} key={g.id} href={'#'+g.id} onClick={()=>setExpanded(p=>({...p,[g.id]:true}))}>
+    {!settings.deadlineList && <ActiveFilters/>}
+    {!filtered && <nav className="metrics" aria-label="Группы инцидентов">{sections.map(g=><a className={'metric '+g.tone} key={g.id} href={'#'+g.id} onClick={()=>setExpanded(p=>({...p,[g.id]:true}))}>
       <span className="metric-heading"><svg width="20" height="20" aria-hidden="true" focusable="false"><use href={'/queue-icons.svg#'+g.icon}/></svg>
-        <span className="category-caption"><strong className="metric-name">{g.name}</strong><span className="count">{snapshot.counts[g.id]}</span></span>
-      </span><small>{g.note}</small></a>)}</nav>
-    <div className="work-grid"><div className="queue">{sections.map(g=>renderGroup(g.id,g.name))}</div>
-      <aside className="rail"><section className="focus"><div className="focus-pattern" aria-hidden="true"/><p className="eyebrow"><span className="signal red-dot"/>Ближайший срок</p>
-        {nearest && nextClock ? <><strong className="big-clock">{nextClock.clock}</strong><p className="clock-note">{nextClock.overdue?'прошло со срока решения':'до срока решения'} · {stamp(nearest.deadline)} {zoneLabel}</p>
-          <div className="focus-bottom"><span className="mono">{nearest.id} / {nearest.productName || 'Продукт не указан'}</span><h3>{nearest.header || 'Без заголовка'}</h3><Link to={pathFor(nearest.id)}>Открыть инцидент <ChevronRight size={14}/></Link></div></>
-          : <p className="clock-note empty-clock">Нет активных инцидентов с указанным сроком.</p>}
-      </section><div className="chat-dock" ref={setChatDock}/></aside></div>
-    {renderGroup('history','История решённых инцидентов')}
+        <span className="category-caption"><strong className="metric-name">{g.name}</strong>{counter(g.id)}</span>
+      </span><small>{g.note}</small></a>)}</nav>}
+    <div className="work-grid"><div className="queue" id="dashboard-queue">
+      {settings.deadlineList ? <section className="group" data-testid="deadline-results" aria-labelledby="deadline-results-heading">
+        <h2 id="deadline-results-heading" className="section-head" ref={deadlineHeading} tabIndex={-1}>Инциденты со сроком решения</h2>
+        <ActiveFilters/>
+        <div className="incident-list">{result.items.map(item=>renderCard(item))}
+          {!result.count && <p className="queue-empty">По выбранным условиям нет активных инцидентов со сроком решения.</p>}
+        </div>
+      </section> : visibleSections.map(g=>renderGroup(g.id,g.name))}
+    </div>
+      <aside className="rail"><DeadlineFocus entries={result.deadlines} showingAll={!!settings.deadlineList} onToggleAll={toggleAllDeadlines}/><div className="chat-dock" ref={setChatDock}/></aside></div>
+    {!settings.deadlineList && !settings.groups.length && renderGroup('history','История решённых инцидентов')}
     {snapshot.diagnostics.length>0 && <details className="source-details"><summary>Замечания к данным ({snapshot.diagnostics.length})</summary><ul>{snapshot.diagnostics.map((m,k)=><li key={k}>{m}</li>)}</ul></details>}
   </main>;
 }

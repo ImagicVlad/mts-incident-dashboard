@@ -1,24 +1,30 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useMatch, useNavigate } from 'react-router-dom';
 import { Bell, CircleAlert, Radio, Search, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { api, errorText, pathFor, type Account } from './api';
 import { useLive } from './live';
 import { Popover, PopoverContent, PopoverTrigger } from './components/ui/popover';
 import { NotificationBell } from './NotificationBell';
+import { useViews } from './filters/ViewContext';
+import { FilterTools } from './filters/FilterTools';
+import { matchesSearch } from './filters/incidentViews';
 
 export function Header({user}: {user:Account}) {
   const {snapshot} = useLive();
-  const [query,setQuery] = useState('');
+  const onDashboard = useMatch('/dashboard');
+  const view=useViews();
+  const [detailQuery,setDetailQuery]=useState('');
+  const [query,setQuery]=onDashboard ? [view.query,view.setQuery] : [detailQuery,setDetailQuery];
   const [error,setError] = useState('');
   const navigate = useNavigate();
   const term = query.trim().toLocaleLowerCase('ru');
-  const found = term ? (snapshot?.incidents || []).filter(i =>
-    [i.header,i.productName,i.id,i.assignedGroupName,i.assignedEmployee,i.sysId].some(s=>s?.toLowerCase().includes(term))) : [];
+  const found = !term ? [] : onDashboard ? view.result.items : (snapshot?.incidents || []).filter(i=>matchesSearch(i,term));
   return <header className="topbar dashboard-bar"><div className="bar-inner dashboard-nav">
     <Link className="mts-mark" to="/dashboard" aria-label="МТС — на дашборд">
       <img src="/mts-logo.svg" width="40" height="40" alt=""/><span>МТС</span>
     </Link>
+    <div className="header-search-tools">
     <form className="incident-search" role="search" onSubmit={e=>{e.preventDefault(); if(found[0]) {setQuery(''); navigate(pathFor(found[0].id));}}}>
       <Search aria-hidden="true" size={19}/><input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Escape')setQuery('');}}
         aria-label="Поиск инцидентов" type="search" placeholder="Поиск инцидентов…" autoComplete="off"/>
@@ -26,6 +32,8 @@ export function Header({user}: {user:Account}) {
         <span className="result-meta">{i.id} · {i.productName || 'Продукт не указан'}</span><strong>{i.header || 'Без заголовка'}</strong></Link>)}
         {!found.length && <p className="empty-result" role="status">Инциденты не найдены</p>}</div>}
     </form>
+    {onDashboard && snapshot?.hasSnapshot && <FilterTools/>}
+    </div>
     <div className="dashboard-actions">
       <NotificationBell key={user.login} login={user.login}/>
       <Popover><PopoverTrigger asChild><button className="account-trigger" aria-label="Аккаунт">{user.displayName.split(/\s+/).map(t=>t[0]).slice(0,2).join('').toUpperCase()}</button></PopoverTrigger>

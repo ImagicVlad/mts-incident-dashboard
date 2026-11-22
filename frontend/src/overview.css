@@ -123,6 +123,86 @@
     .incident-chat { grid-column: 1 / -1; height: clamp(360px, 58svh, 460px); }
   }
 
+  .deadline-focus {
+    --deadline-gutter: 22px;
+    --deadline-sub: #c5cad3;
+    --deadline-line: #414650;
+    --deadline-signal: #ff5368;
+    min-width: 0; padding: 0; container-type: inline-size;
+  }
+  .deadline-focus .focus-pattern {
+    inset: 0 0 auto auto; width: 60%; height: 135px; opacity: 1;
+    background: repeating-radial-gradient(circle at 89% 6%, transparent 0 17px, #c7d1e61c 18px, transparent 19px 38px);
+    mask-image: linear-gradient(230deg, #000, transparent 85%);
+    pointer-events: none;
+  }
+  .deadline-head {
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+    gap: 5px 12px; padding: 22px var(--deadline-gutter) 12px;
+  }
+  .deadline-head .eyebrow {
+    gap: 8px; color: #f2dde0; font-size: .6875rem; line-height: 1.4; letter-spacing: .08em;
+  }
+  .deadline-head .eyebrow:not(:has(.signal))::before { content: ""; }
+  .deadline-head .eyebrow::before, .deadline-head .signal {
+    flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--deadline-signal);
+  }
+  .deadline-body { padding: 0 var(--deadline-gutter) 12px; }
+  .deadline-body .big-clock {
+    margin: 0; font-size: clamp(3.25rem, 18cqi, 4.3125rem); line-height: 1.01; overflow-wrap: anywhere;
+  }
+  .deadline-focus .empty-clock { margin: 0; padding: 0 var(--deadline-gutter) 22px; }
+  .deadline-focus button {
+    border: 0; padding: 0; font: inherit; color: inherit; background: transparent; cursor: pointer;
+  }
+  .deadline-switch {
+    display: grid; grid-auto-columns: minmax(0, 1fr); grid-auto-flow: column;
+    margin: 5px var(--deadline-gutter) 0; gap: 3px; padding: 3px;
+    background: #171b22; border-radius: 8px;
+  }
+  .deadline-switch button {
+    min-width: 0; padding: 7px 2px; border-radius: 6px; color: var(--deadline-sub); font: 500 .875rem/1.35 var(--mono);
+  }
+  .deadline-switch small {
+    display: block; margin-top: 2px; font: 500 .6875rem/1.25 var(--font-ui); overflow-wrap: anywhere;
+  }
+  .deadline-switch button:hover { background: #353a43; color: white; }
+  .deadline-switch button[aria-pressed="true"] {
+    color: white; background: #414650; box-shadow: inset 0 -2px 0 var(--deadline-signal);
+  }
+  .deadline-incident { min-width: 0; padding: 17px var(--deadline-gutter) 18px; overflow-wrap: anywhere; }
+  .deadline-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 1px 7px; }
+  .deadline-meta, .deadline-team { color: var(--deadline-sub); font-size: .75rem; line-height: 1.4; }
+  .deadline-meta .mono {
+    color: inherit; font: 500 .6875rem/1.35 var(--mono); letter-spacing: .01em;
+  }
+  .deadline-incident h3 { margin: 4px 0 0; font-size: 1.25rem; line-height: 1.2; }
+  .deadline-incident h3 a { display: flex; align-items: center; gap: 4px; width: fit-content; max-width: 100%; }
+  .deadline-title { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .deadline-incident h3 svg { flex: none; }
+  .deadline-team { margin-top: 8px; }
+  .deadline-focus .deadline-all {
+    display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 8px;
+    min-height: 46px; padding: 11px var(--deadline-gutter); border-top: 1px solid var(--deadline-line);
+    background: #ffffff09; font-size: .875rem; font-weight: 600; text-align: left;
+  }
+  .deadline-all:hover span, .deadline-incident a:hover .deadline-title {
+    text-decoration: underline; text-underline-offset: 3px;
+  }
+  .deadline-focus :is(a, button):focus-visible { outline: 2px solid var(--deadline-signal); outline-offset: 2px; }
+  .deadline-focus :is(.deadline-switch button, .deadline-all):focus-visible { outline-offset: -2px; }
+  #deadline-results-heading { scroll-margin-top: 88px; }
+  @media (max-width: 600px) {
+    #deadline-results-heading { scroll-margin-top: 120px; }
+  }
+
+  @container (max-width: 21rem) {
+    .deadline-focus > :not(.focus-pattern) { --deadline-gutter: 15px; }
+  }
+  @media (pointer: coarse) {
+    .deadline-switch button { min-height: 44px; }
+  }
+
   @media (min-width: 761px) {
     .rail {
       margin-top: calc(1.566rem + 13px);
@@ -130,7 +210,15 @@
     .work-grid:has(.chat-dock:empty) { grid-template-columns: minmax(0,1fr); grid-template-areas: "side" "queue"; }
     .work-grid:has(.chat-dock:empty) .queue { grid-area: queue; }
     .rail:has(.chat-dock:empty) { grid-area: side; margin-top: 0; }
-    .rail:has(.chat-dock:empty) .focus { display: grid; grid-template-columns: minmax(220px, 1fr) 2fr; column-gap: 24px; }
-    .rail:has(.chat-dock:empty) .focus > :is(.eyebrow,.big-clock,.clock-note) { grid-column: 1; }
-    .rail:has(.chat-dock:empty) .focus-bottom { grid-column: 2; grid-row: 1 / span 3; align-self: center; margin: 0; border: 0; border-left: 1px solid #464a53; padding: 0 0 0 24px; }
+    .rail:has(.chat-dock:empty) .deadline-focus:has(.deadline-switch) {
+      display: grid; grid-template-columns: minmax(240px, 1fr) minmax(0, 2fr);
+      grid-template-areas: "head head" "clock incident" "switch incident" "all all";
+    }
+    .rail:has(.chat-dock:empty) .deadline-head { grid-area: head; }
+    .rail:has(.chat-dock:empty) .deadline-body { grid-area: clock; }
+    .rail:has(.chat-dock:empty) .deadline-switch { grid-area: switch; margin-bottom: 18px; }
+    .rail:has(.chat-dock:empty) .deadline-incident {
+      grid-area: incident; align-self: center; margin-bottom: 18px; padding-block: 0; border-left: 1px solid var(--deadline-line);
+    }
+    .rail:has(.chat-dock:empty) .deadline-all { grid-area: all; }
   }

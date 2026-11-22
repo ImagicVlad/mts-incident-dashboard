@@ -1,12 +1,11 @@
-import { useRef, useState, useEffect, type ReactNode } from 'react';
+import { useRef, useState, useEffect, useMemo, type ReactNode } from 'react';
 import { ArrowUp, RotateCw, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { api, errorText, pathFor, type Answer, type SummaryAnswer, type Message, type Incident } from './api';
 import { useLive } from './live';
+import { AssistantMessage } from './AssistantMessage';
 
-function AnswerText({text}:{text:string}) {
-  const {snapshot} = useLive();
-  const ids = (snapshot?.incidents || []).map(i=>i.id).sort((a,b)=>b.length-a.length);
+function linkIncidentText(text: string, ids: string[]) {
   let tail = text;
   const parts:ReactNode[] = [];
   // Match only exact identifiers from the current snapshot. Never render model HTML.
@@ -23,8 +22,20 @@ function AnswerText({text}:{text:string}) {
   }
   return <>{parts}{tail}</>;
 }
+function useAnswerTextRenderer() {
+  const incidents = useLive().snapshot?.incidents;
+  return useMemo(() => {
+    const ids = (incidents || []).map(i=>i.id).sort((a,b)=>b.length-a.length);
+    return (text: string) => linkIncidentText(text, ids);
+  }, [incidents]);
+}
+function AnswerText({text}:{text:string}) {
+  const renderText = useAnswerTextRenderer();
+  return renderText(text);
+}
 export function Chat() {
   const {snapshot,aiConfigured:configured} = useLive();
+  const renderText = useAnswerTextRenderer();
   const [messages,setMessages] = useState<(Message & {source?:Answer})[]>([]);
   const [draft,setDraft] = useState('');
   const [error,setError] = useState('');
@@ -60,10 +71,13 @@ export function Chat() {
   }
   return <>
     <div className="chat-log" role="log" aria-label="Переписка по инцидентам" ref={history}>
-      <div className="chat-message"><strong>Ассистент</strong><p>{configured===false?'ИИ не настроен. Для чата требуется подключение провайдера на сервере.':'Что проверить по смене? Могу подсказать сроки инцидентов и назначенные команды.'}</p></div>
+      <AssistantMessage renderText={renderText} text={configured===false?'ИИ не настроен. Для чата требуется подключение провайдера на сервере.':'Что проверить по смене? Могу подсказать сроки инцидентов и назначенные команды.'}/>
       {!messages.length && configured!==false && <div className="chat-suggestions">{['У какого инцидента ближайший срок?','Какие инциденты на координаторах?'].map(s=><button key={s} onClick={()=>{setDraft(s);input.current?.focus();}}>{s}</button>)}</div>}
-      {messages.map((m,k)=><div className={'chat-message '+(m.role==='user'?'from-user':'')} key={k}><strong>{m.role==='user'?'Вы':'Ассистент'}</strong><p><AnswerText text={m.content}/></p>
-        {m.source && <small>Снимок {m.source.snapshotVersion}{m.source.stale || m.source.epoch!==snapshot?.epoch || m.source.snapshotVersion!==snapshot?.snapshotVersion?' · данные обновились':''}</small>}</div>)}
+      {messages.map((m,k)=>m.role==='user'
+        ? <div className="chat-message from-user" key={k}><strong>Вы</strong><p>{renderText(m.content)}</p></div>
+        : <AssistantMessage key={k} text={m.content} renderText={renderText}>
+          {m.source && <small>Снимок {m.source.snapshotVersion}{m.source.stale || m.source.epoch!==snapshot?.epoch || m.source.snapshotVersion!==snapshot?.snapshotVersion?' · данные обновились':''}</small>}
+        </AssistantMessage>)}
     </div>
     {pending && <p className="chat-status" role="status">Ассистент готовит ответ…</p>}
     {error && <p className="chat-error" role="alert">{error} <button className="text-action" onClick={submit}>Повторить</button></p>}
