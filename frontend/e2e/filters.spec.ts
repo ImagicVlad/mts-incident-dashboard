@@ -45,6 +45,16 @@ async function open(page:Page) {
 const count=(page:Page)=>page.locator('.active-filters > strong');
 const sortButton=(panel:Locator)=>panel.getByRole('button',{name:'Сортировка',exact:true});
 const ids=(page:Page,g:string)=>page.getByTestId('group-'+g).locator('.incident').evaluateAll(nodes=>nodes.map(n=>n.getAttribute('data-incident-id')));
+function backgroundPoint(map:Locator) {
+  return map.locator('.graph-stage > svg').evaluate(svg=>{
+    const r=svg.getBoundingClientRect();
+    for (const across of [.08,.92,.5]) for (const down of [.08,.92,.5]) {
+      const x=r.x+r.width*across, y=r.y+r.height*down;
+      if (document.elementFromPoint(x,y)===svg) return {x,y};
+    }
+    throw new Error('Не найден свободный участок карты');
+  });
+}
 async function chooseTimeOption(page:Page,panel:Locator,field:string,option:string) {
   await panel.getByRole('button',{name:field,exact:true}).click();
   await page.getByRole('listbox').getByRole('option',{name:option,exact:true}).click();
@@ -128,10 +138,6 @@ test('карта связей открывается отдельно, масш�
   await expect(node.locator('.graph-card-title')).toBeVisible();
   await expect(node.locator('.graph-card-title')).toContainText('Проверка');
   const canvas=(await map.locator('.graph-stage > svg').boundingBox())!;
-  const originalPosition=await node.getAttribute('transform');
-  await page.mouse.move(canvas.x+12,canvas.y+12);await page.mouse.down();
-  await page.mouse.move(canvas.x+36,canvas.y+28,{steps:4});await page.mouse.up();
-  await expect(node).not.toHaveAttribute('transform',originalPosition!);
   const card=node.locator('.graph-card-body');
   const tooltip=map.getByRole('tooltip');
   await card.hover();
@@ -156,6 +162,22 @@ test('карта связей открывается отдельно, масш�
   await control('Вписать карту').click();
   await control('Отдалить').click();
   await expect.poll(async()=>parseInt(await scale.innerText())).toBeLessThan(100);
+  const zoom=await scale.innerText();
+  const blank=await backgroundPoint(map);
+  const originalPosition=await node.getAttribute('transform');
+  await page.mouse.move(blank.x,blank.y);await page.mouse.down();
+  await page.mouse.move(blank.x+24,blank.y+16,{steps:4});await page.mouse.up();
+  await expect(node).not.toHaveAttribute('transform',originalPosition!);
+  await expect(node).toHaveAttribute('aria-pressed','true');
+  await expect(map.locator('.graph-inspector')).toContainText('LAB-2');
+  const spot=await backgroundPoint(map);
+  await page.mouse.click(spot.x,spot.y);
+  await expect(node).toHaveAttribute('aria-pressed','false');
+  await expect(map.locator('.graph-cluster[data-muted="true"]')).toHaveCount(0);
+  await expect(map.locator('.graph-inspector')).toBeHidden();
+  await expect(scale).toHaveText(zoom);
+  await card.click();
+  await expect(map.locator('.graph-inspector')).toContainText('LAB-2');
 
   await control('Развернуть карту').click();
   await expect(map).toHaveAttribute('data-mode','maximized');
@@ -199,6 +221,11 @@ test.describe('Карта на телефоне',()=>{
     await expect(tip).toContainText('Назначен команде');
     await expect(tip).toContainText(sibling.assignedGroupName!);
     await expect(tip).toContainText(displayFormats().time(sibling.deadline));
+    const blank=await backgroundPoint(map);
+    await page.touchscreen.tap(blank.x,blank.y);
+    await expect(tip).toBeHidden();
+    await expect(map.locator('.graph-inspector')).toBeHidden();
+    await map.locator('[data-incident-id="LAB-21"] .graph-card-body').tap();
     await map.getByRole('link',{name:'Открыть инцидент'}).click();
     await expect(page).toHaveURL(/\/incidents\/LAB-21$/);
     await expect(page.getByRole('heading',{name:'Потеря пакетов',exact:true})).toBeVisible();

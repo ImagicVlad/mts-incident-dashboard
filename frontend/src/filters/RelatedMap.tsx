@@ -168,7 +168,8 @@ export function RelatedMap({items,onOpenIncident}:{items:Incident[];onOpenIncide
   function down(e:PointerEvent<SVGSVGElement>) {
     if (e.button!==0) return;
     if (!(e.target as Element).closest('[data-incident-id]')) setHover('');
-    if (!pointers.current.size) {dragged.current=false;travel.current=0;}
+    if (pointers.current.size) dragged.current=true;
+    else {dragged.current=false;travel.current=0;}
     pointers.current.set(e.pointerId,point(e));
     (e.target as Element).setPointerCapture(e.pointerId);
     setSearchOpen(false);
@@ -229,6 +230,12 @@ export function RelatedMap({items,onOpenIncident}:{items:Incident[];onOpenIncide
     </div>
     <div className="graph-stage">
       <svg ref={svg} aria-label="Граф инцидентов по продуктам и сервисам" onPointerDown={down} onPointerMove={move}
+        onClick={e=>{
+          if (e.target===e.currentTarget && !dragged.current) {
+            setSelected('');
+            setHover('');
+          }
+        }}
         onPointerUp={e=>pointers.current.delete(e.pointerId)} onPointerCancel={e=>pointers.current.delete(e.pointerId)}
         onLostPointerCapture={e=>pointers.current.delete(e.pointerId)}>
         <defs><clipPath id={cardClip}><rect x={-CARD_WIDTH/2+6} y={-CARD_HEIGHT/2+2}
