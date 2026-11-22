@@ -139,6 +139,23 @@ test('срочные события всплывают один раз, прос
     issue.stateEnum = 'Resolved';
     await publish();
     await expect(issueEvents.filter({hasText: 'Инцидент решён'})).toBeVisible();
+    await expect(issueEvents).toHaveCount(4);
+    const feed = panel.locator('.notification-feed');
+    for (const width of [1280, 320]) {
+      await page.setViewportSize({width, height: 800});
+      await expect.poll(() => feed.evaluate(list => {
+        const bottom = list.getBoundingClientRect().bottom;
+        const third = list.children[2].getBoundingClientRect();
+        const fourth = list.children[3].getBoundingClientRect();
+        return Math.abs(third.bottom - bottom) < 1 && fourth.top >= bottom - 1;
+      })).toBe(true);
+    }
+    await issueEvents.last().scrollIntoViewIfNeeded();
+    expect(await feed.evaluate(list => list.scrollTop)).toBeGreaterThan(0);
+    await expect(panel.getByRole('heading')).toBeInViewport();
+    await page.keyboard.press('Escape');
+    await bell.click();
+    await expect.poll(() => feed.evaluate(list => list.scrollTop)).toBe(0);
     await page.keyboard.press('Escape');
     await expect(dot).toHaveCount(0);
     await expect(toast).toHaveCount(0);
