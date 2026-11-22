@@ -59,7 +59,8 @@ test('передача активного инцидента обновляет 
     await detail.getByRole('button',{name:'Передать команде'}).click();
     await expect(detail.locator('.record-label .pill')).toHaveText('Назначен команде');
     await expect(detail.locator('.facts')).toContainText('Сервис платежей');
-    await expect(detail.getByRole('region',{name:'Даты инцидента'})).toContainText('У команды с');
+    const teamRow = detail.locator('.facts').getByText('Команда назначения',{exact:true}).locator('+ dd');
+    await expect(teamRow.locator('time')).toContainText('МСК');
     await expect(detail.locator('.facts')).not.toContainText('Следующий шаг');
     await expect(detail.getByRole('button',{name:'Назначить команду'})).toHaveCount(0);
     const log = detail.getByRole('region',{name:'История изменений'});
@@ -211,6 +212,7 @@ test('краткие карточки показывают команду и ж�
     const facts = page.locator('.facts');
     await expect(facts.getByText('Исполнитель', {exact: true}).locator('+ dd')).toHaveText(urgent.assignedEmployee);
     const deadline = page.getByRole('region',{name:'Даты инцидента'}).getByText('Срок решения',{exact:true}).locator('+ dd time');
+    await expect(deadline).toContainText(displayFormats().dateFormat.format(new Date(urgent.deadline)));
     await expect(deadline).toHaveAttribute('title',displayFormats().stamp(urgent.deadline)+' МСК');
   } finally { await replace(original); }
 });

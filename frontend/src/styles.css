@@ -88,19 +88,18 @@ nav a svg, .focus-bottom a svg, .button svg { vertical-align: middle; }
 summary { cursor: pointer; }
 .paper-heading { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; }
 .paper-heading .record-label { margin: 0; flex-wrap: wrap; }
-.incident-dates { container-type: inline-size; margin: 4px 0 16px; padding-top: 15px; border-top: 1px solid var(--line); }
-.incident-dates-heading { display: flex; align-items: center; gap: 8px; font-size: .85rem; font-weight: 600; }
-.incident-dates-heading svg, .dates-zone { color: var(--muted); }
-.dates-zone { margin-inline-start: auto; font: .72rem var(--mono); }
-.incident-dates dl { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; margin: 16px 0 0; }
-.incident-dates dl > div + div { border-inline-start: 1px solid var(--line); padding-inline-start: 14px; }
-.incident-dates dt, .incident-dates small { color: var(--muted); font-size: .8rem; font-weight: 400; }
-.incident-dates dd { margin: 4px 0 0; font-size: 1.14rem; line-height: 1.2; font-weight: 600; font-variant-numeric: tabular-nums; }
-.incident-dates time small { display: block; margin-top: 4px; }
-@container (max-width: 31rem) {
-  .incident-dates dl { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0,1fr)); row-gap: 14px; }
-  .incident-dates dl > div:nth-child(odd) { padding-inline-start: 0; border: 0; }
-}
+.team-since { font-size: .81rem; color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
+.facts dd:has(.team-since) { display: flex; align-items: baseline; flex-wrap: wrap; gap: .2em .65em; }
+.incident-dates { margin-block: 6px 18px; padding: 14px 16px; border-radius: 10px; background: color-mix(in srgb, var(--muted) 6%, transparent); }
+.incident-dates header, .incident-dates dl > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.incident-dates header { margin-bottom: 9px; }
+.incident-dates h3 { font-size: .94rem; }
+.incident-dates header > span { color: var(--muted); font-size: .73rem; }
+.incident-dates dl { display: grid; gap: 8px; margin: 0; font-size: .88rem; line-height: 1.35; }
+.incident-dates dt, .incident-dates time span { color: var(--muted); }
+.incident-dates dd { margin: 0; text-align: end; font-variant-numeric: tabular-nums; }
+.incident-dates time { display: inline-flex; gap: .7em; align-items: baseline; }
+.incident-dates time b { font-weight: 600; }
 .record-text { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 16px; }
 .record-text p, .answer-text, .chat-message p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
 .record-text p { margin-top: 8px; }
