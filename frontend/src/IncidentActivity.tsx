@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
-import { GitCommitHorizontal, MessageSquare, ArrowRight } from 'lucide-react';
+import { GitCommitHorizontal, MessageSquare, ArrowRight, Check, LoaderCircle } from 'lucide-react';
 import { api, errorText, type Incident } from './api';
 import { useLive } from './live';
 
@@ -58,12 +58,17 @@ export function IncidentActivity({item}: {item: Incident}) {
   }
   return <section className="incident-activity" aria-labelledby="activity-title">
     <header><GitCommitHorizontal size={22} aria-hidden="true"/><h2 id="activity-title">История изменений</h2></header>
-    <form onSubmit={e=>{e.preventDefault(); void submit();}}>
+    <form className="comment-form" onSubmit={e=>{e.preventDefault(); void submit();}}>
       <label htmlFor="incident-comment">Комментарий</label>
-      <textarea id="incident-comment" placeholder="Что проверили или передали команде?" maxLength={2000}
-        rows={2} value={draft} disabled={sending} onChange={e=>{setDraft(e.target.value);commentId.current=null;}}
-        onKeyDown={e=>{if ((e.ctrlKey || e.metaKey) && e.key==='Enter') {e.preventDefault(); void submit();}}}/>
-      <button className="button secondary" disabled={sending || !draft.trim()}>{sending?'Отправляем…':'Добавить комментарий'}</button>
+      <div className="comment-composer" aria-busy={sending}>
+        <textarea id="incident-comment" placeholder="Что проверили или передали команде?" maxLength={2000}
+          rows={2} value={draft} readOnly={sending} onChange={e=>{setDraft(e.target.value);commentId.current=null;}}
+          onKeyDown={e=>{if ((e.ctrlKey || e.metaKey) && e.key==='Enter') {e.preventDefault(); void submit();}}}/>
+        <button type="submit" className="comment-submit" disabled={sending || !draft.trim()}
+          aria-label={sending?'Отправляем комментарий':'Добавить комментарий'} title="Отправить комментарий (Ctrl+Enter / ⌘+Enter)">
+          {sending ? <LoaderCircle size={20} aria-hidden="true"/> : <Check size={21} strokeWidth={2.5} aria-hidden="true"/>}
+        </button>
+      </div>
       {error && <p role="alert">{error}</p>}
     </form>
     {history.isPending && <p role="status">Загружаем историю…</p>}

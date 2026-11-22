@@ -33,10 +33,33 @@ nav a svg, .focus-bottom a svg, .button svg { vertical-align: middle; }
 .incident-activity { margin: 26px 0 0; padding: clamp(16px,2.5vw,30px); background: white; border: 1px solid var(--line); border-radius: 14px; }
 .incident-activity header { display:flex; align-items:center; gap:10px; }
 .incident-activity h2 { margin:0; font-size:1.35rem; }
-.incident-activity form { display:grid; gap:8px; margin:20px 0 24px; }
-.incident-activity label { font-size:.86rem; font-weight:600; }
-.incident-activity textarea { box-sizing:border-box; width:100%; padding:11px 13px; border:1px solid var(--line); border-radius:8px; background:#fafafb; color:inherit; font:inherit; resize:vertical; }
-.incident-activity textarea:focus-visible { outline:2px solid #737880; outline-offset:1px; }
+.comment-form { display:grid; gap:7px; margin:20px 0 24px; }
+.comment-form label { width:fit-content; font-size:.86rem; font-weight:600; }
+.comment-composer {
+  display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:10px;
+  padding:7px 8px 7px 14px; border:1px solid #cbd0d7; border-radius:12px; background:#f8f9fa;
+}
+.comment-composer:focus-within { background:white; border-color:#8e676e; box-shadow:0 0 0 2px #9f203514; }
+.comment-composer textarea {
+  display:block; width:100%; min-width:0; min-height:1.5em; max-height:10.5em; padding:0;
+  border:0; outline:0; background:transparent; color:inherit; font:inherit; line-height:1.5; resize:vertical;
+}
+.comment-composer textarea::placeholder { color:#666e79; }
+@supports (field-sizing:content) {
+  .comment-composer textarea { field-sizing:content; resize:none; }
+}
+.comment-submit {
+  display:grid; place-items:center; width:44px; height:44px; padding:0; border:0; border-radius:9px;
+  background:#d8192a; color:white; cursor:pointer;
+}
+.comment-submit:enabled:hover { background:#b61423; }
+.comment-submit:focus-visible { outline:2px solid #44272c; outline-offset:2px; }
+.comment-submit:disabled { background:#e7e9ed; color:#737b86; cursor:default; }
+@media (prefers-reduced-motion:no-preference) {
+  .comment-submit,.comment-composer { transition:background-color .15s, border-color .15s; }
+  .comment-composer[aria-busy="true"] svg { animation:comment-sending .85s linear infinite; }
+  @keyframes comment-sending { to { transform:rotate(360deg); } }
+}
 .incident-activity .button { justify-self:start; min-height:36px; padding:7px 12px; font-size:.85rem; }
 .incident-activity .button:disabled { opacity:.5; cursor:default; }
 .activity-list { padding:0; margin:0; list-style:none; }
