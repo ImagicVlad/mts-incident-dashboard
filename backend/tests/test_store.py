@@ -180,6 +180,37 @@ def test_events_content_comparison_and_recovery(tmp_path):
     asyncio.run(scenario())
 
 
+@pytest.mark.asyncio
+async def test_notification_feed_survives_restart_and_retention(tmp_path, monkeypatch):
+    monkeypatch.setattr("app.store.RUNTIME", tmp_path)
+    source = tmp_path / "incidents.json"
+    store = Store(source, False)
+    save(source, [])
+    await store.reload()
+    overdue = row("LATE", deadline="2020-01-01T00:00:00Z")
+    save(source, [overdue])
+    await store.reload()
+    assert [event["kind"] for event in store.snapshot()["notifications"]] == ["overdue"]
+
+    critical = [row(f"C-{i:03}", priorityId=4) for i in range(105)]
+    save(source, critical + [dict(overdue, deadline=None)])
+    await store.reload()
+    feed = store.snapshot()["notifications"]
+    assert [event["incidentId"] for event in feed] == [item["id"] for item in reversed(critical[5:])]
+
+    restarted = Store(source, False)
+    await restarted.reload()
+    assert restarted.epoch != store.epoch
+    assert restarted.snapshot()["notifications"] == feed
+    assert Store(tmp_path / "other.json", False).snapshot()["notifications"] == []
+
+    save(source, [*critical, overdue, row("NEW", assignedGroupName=COORDINATORS)])
+    await restarted.reload()
+    updated = restarted.snapshot()["notifications"]
+    assert (updated[0]["incidentId"], updated[0]["kind"]) == ("NEW", "assigned")
+    assert updated[1:] == feed[:-1]
+
+
 def test_watch_atomic_replace_broadcast_and_reconnect(tmp_path: Path):
     async def scenario():
         source = tmp_path / "incidents.json"

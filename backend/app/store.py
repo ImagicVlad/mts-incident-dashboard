@@ -11,7 +11,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from watchfiles import awatch
-from .activity import ActivityLog
+from .activity import ActivityLog, FEED_LIMIT
 
 from .demo_data import RUNTIME, atomic_write
 from .domain import OPEN, Incident, classify, critical_from, deadline_order, memberships, normalize_records, transitions, utc_string
@@ -44,10 +44,10 @@ class Store:
         self._groups = classify({})
         self._classified_at: datetime | None = None
         self._next_clock_event: datetime | None = None
-        self._breached_ids: set[str] = set()
+        events, self._breached_ids = self.activity.load_feed()
         self._rows: list[dict] = []
         self._diagnostics: list[str] = []
-        self._events: deque[dict] = deque(maxlen=100)
+        self._events: deque[dict] = deque(events, maxlen=FEED_LIMIT)
         self._loaded_at: str | None = None
         self._updated_at: str | None = None
         self._error: str | None = "Данные ещё не загружены."
@@ -166,6 +166,7 @@ class Store:
         initial = self._classified_at is None
         events = [] if initial else list(transitions(self._items, items, now=at, previous_now=self._classified_at))
         thresholds = []
+        newly_breached = set()
         for item in items.values():
             critical_at = critical_from(item)
             if critical_at and critical_at > at:
@@ -176,14 +177,17 @@ class Store:
             if deadline > at:
                 thresholds.append(deadline)
             elif item.id not in self._breached_ids:
-                self._breached_ids.add(item.id)
+                newly_breached.add(item.id)
                 if not initial:
                     events.append((item.id, "overdue", "Нарушен срок SLA"))
-        for index, (id_, kind, label) in enumerate(events):
-            self._events.appendleft({
+        if events:
+            notices = [{
                 "eventId": f"{self.epoch}-{self._version + 1}-{index}",
                 "incidentId": id_, "kind": kind, "label": label, "time": utc_string(at),
-            })
+            } for index, (id_, kind, label) in enumerate(events)]
+            self.activity.append_notifications(notices)
+            self._events.extendleft(notices)
+        self._breached_ids.update(newly_breached)
         self._groups = classify(items, now=at)
         self._next_clock_event = min(thresholds, default=None)
         self._classified_at = at

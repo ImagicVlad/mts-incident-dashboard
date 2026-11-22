@@ -10,6 +10,8 @@ FIELDS = ("header", "stateEnum", "priorityId", "productName", "service", "assign
           "assignedEmployee", "deadline", "submitDate", "lastAssignmentToTeamDateTime",
           "completionDate", "description", "shortDescription", "solution")
 
+FEED_LIMIT = 100
+
 
 class ActivityLog:
     def __init__(self, path):
@@ -24,7 +26,31 @@ class ActivityLog:
                     UNIQUE (incident, id)
                 );
                 CREATE INDEX IF NOT EXISTS incident_timeline ON activity(incident, seq);
+                CREATE TABLE IF NOT EXISTS notifications (
+                    seq INTEGER PRIMARY KEY, eventId TEXT NOT NULL UNIQUE, incidentId TEXT NOT NULL,
+                    kind TEXT NOT NULL, label TEXT NOT NULL, time TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS notified_overdue (incidentId TEXT PRIMARY KEY);
             """)
+
+    def load_feed(self):
+        with closing(sqlite3.connect(self.path)) as db:
+            db.row_factory = sqlite3.Row
+            rows = db.execute("""SELECT eventId, incidentId, kind, label, time
+                                 FROM notifications ORDER BY seq DESC LIMIT ?""", (FEED_LIMIT,))
+            events = [dict(row) for row in rows]
+            overdue = {row[0] for row in db.execute("SELECT incidentId FROM notified_overdue")}
+        return events, overdue
+
+    def append_notifications(self, events):
+        with closing(sqlite3.connect(self.path)) as db, db:
+            db.executemany("""INSERT INTO notifications(eventId, incidentId, kind, label, time)
+                              VALUES (:eventId, :incidentId, :kind, :label, :time)""", events)
+            db.executemany("INSERT OR IGNORE INTO notified_overdue VALUES (?)",
+                           ((event["incidentId"],) for event in events if event["kind"] == "overdue"))
+            db.execute("""DELETE FROM notifications WHERE seq < (
+                          SELECT seq FROM notifications ORDER BY seq DESC LIMIT 1 OFFSET ?)""",
+                       (FEED_LIMIT - 1,))
 
     def observe(self, items, time, assigned_id=None, author=None):
         with closing(sqlite3.connect(self.path)) as db, db:
