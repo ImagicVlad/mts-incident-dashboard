@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ChevronLeft, GitPullRequestArrow, ExternalLink } from 'lucide-react';
+import { ChevronLeft, ExternalLink } from 'lucide-react';
 import { IncidentActivity } from './IncidentActivity';
 import { FilterPicker } from './filters/FilterTools';
 import { active, api, errorText, finished, remaining, type Incident, type Snapshot } from './api';
@@ -25,7 +25,7 @@ function Assignment({item, incidents}: {item: Incident; incidents: Incident[]}) 
   const [employee, setEmployee] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
-  if (!open) return <button className="button secondary assignment-start" onClick={()=>setOpen(true)}><GitPullRequestArrow size={16} aria-hidden="true"/>Назначить команду</button>;
+  if (!open) return <button className="button secondary assignment-start" onClick={()=>setOpen(true)}><svg width="18" height="18" aria-hidden="true"><use href="/queue-icons.svg#users-plus"/></svg>Назначить команду</button>;
   function options(values:(string | null)[]) {
     return [...new Set(values.filter((v): v is string => Boolean(v)))].sort((a,b)=>a.localeCompare(b,'ru')).map(value=>({value,label:value}));
   }

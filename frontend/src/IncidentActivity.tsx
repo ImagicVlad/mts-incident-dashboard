@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
-import { GitCommitHorizontal, MessageSquare, ArrowRight, Check, LoaderCircle } from 'lucide-react';
+import { GitCommitHorizontal, MessageSquare, ArrowRight, Send, LoaderCircle } from 'lucide-react';
 import { api, errorText, type Incident } from './api';
 import { useLive } from './live';
 
@@ -66,7 +66,7 @@ export function IncidentActivity({item}: {item: Incident}) {
           onKeyDown={e=>{if ((e.ctrlKey || e.metaKey) && e.key==='Enter') {e.preventDefault(); void submit();}}}/>
         <button type="submit" className="comment-submit" disabled={sending || !draft.trim()}
           aria-label={sending?'Отправляем комментарий':'Добавить комментарий'} title="Отправить комментарий (Ctrl+Enter / ⌘+Enter)">
-          {sending ? <LoaderCircle size={20} aria-hidden="true"/> : <Check size={21} strokeWidth={2.5} aria-hidden="true"/>}
+          {sending ? <LoaderCircle size={20} aria-hidden="true"/> : <Send size={20} aria-hidden="true"/>}
         </button>
       </div>
       {error && <p role="alert">{error}</p>}
