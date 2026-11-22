@@ -53,6 +53,6 @@ export function Details() {
       <Summary key={item.id} item={item}/>
       </div>
       {item.itsmUrl && /^https?:\/\//i.test(item.itsmUrl) ? <a className="button secondary" href={item.itsmUrl} target="_blank" rel="noopener noreferrer">Открыть в ITSM <ExternalLink size={16}/></a> : item.dataOrigin !== 'defense-scenario' && <p className="integration-note">Внешняя ITSM не подключена</p>}
-    </aside></div></article><Link className="button secondary" to="/dashboard">Вернуться на дашборд</Link>
+    </aside></div></article>
   </main>;
 }

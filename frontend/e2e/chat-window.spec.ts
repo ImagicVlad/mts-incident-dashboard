@@ -131,7 +131,7 @@ test('встроенный чат скрыт в карточке, а при во
   const chat = page.locator('.incident-chat');
   const input = chat.getByRole('textbox');
   const mode = (name: string) => expect(chat).toHaveAttribute('data-mode', name);
-  const back = page.getByRole('link', {name: 'Вернуться на дашборд', exact: true});
+  const back = page.getByRole('navigation', {name: 'Путь'}).getByRole('link', {name: 'Дашборд'});
   await mode('docked');
   await page.route('**/api/ai/chat', route => route.fulfill({json: {
     answer: 'Сводка по смене. '.repeat(150), epoch: 'test', snapshotVersion: 1, asOf: new Date().toISOString(),
