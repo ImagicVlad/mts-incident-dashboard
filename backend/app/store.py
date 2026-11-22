@@ -11,6 +11,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from watchfiles import awatch
+from .activity import ActivityLog
 
 from .demo_data import RUNTIME, atomic_write
 from .domain import OPEN, Incident, classify, critical_from, deadline_order, memberships, normalize_records, transitions, utc_string
@@ -33,6 +34,7 @@ class Store:
         self.path = Path(path).resolve()
         source_key = sha256(os.fsencode(self.path)).hexdigest()
         self.assignments_file = RUNTIME / f"assignments-{source_key}.json"
+        self.activity = ActivityLog(RUNTIME / f"activity-{source_key}.sqlite3")
         self.demo = demo
         self.polling = polling
         self.template = itsm_url_template
@@ -116,7 +118,7 @@ class Store:
     def _assignment_key(row):
         return [row.sysId, row.submitDate, row.assignedGroupName, row.assignedEmployee, row.lastAssignmentToTeamDateTime]
 
-    async def assign(self, id_, team, employee, expected_employee, expected_time):
+    async def assign(self, id_, team, employee, expected_employee, expected_time, author="Координатор"):
         async with self._lock:
             items, stamp, saved = await asyncio.to_thread(self._read)
             item = items.get(id_)
@@ -133,7 +135,7 @@ class Store:
             await asyncio.to_thread(atomic_write, self.assignments_file, json.dumps(saved, ensure_ascii=False))
             items[id_] = item.model_copy(update=changes)
             self._signature = stamp
-            self._accept(items)
+            self._accept(items, id_, author)
             return items[id_]
 
     async def reload(self) -> None:
@@ -192,7 +194,7 @@ class Store:
             self._regroup(self._items, at)
             self._publish()
 
-    def _accept(self, items: dict[str, Incident]) -> None:
+    def _accept(self, items: dict[str, Incident], assigned_id=None, author=None) -> None:
         initial = self._loaded_at is None
         changed = initial or self._items != items
         recovery = self._error is not None
@@ -200,6 +202,9 @@ class Store:
             return
         at = utc_now()
         time = utc_string(at)
+        if changed:
+            self.activity.observe((item for key, item in items.items() if self._items.get(key) != item),
+                                  time, assigned_id, author)
         self._regroup(items, at)
         if changed:
             self._items = items

@@ -3,9 +3,10 @@ import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from typing import Annotated
+from uuid import UUID
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException, Request, Response, Security
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, Security
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyCookie
@@ -15,9 +16,9 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from .ai import AIAnswer, AIService, ChatInput, SummaryAnswer, SummaryInput, incident_by_id
 from .config import Settings
 from .demo_data import prepare_default_demo
-from .domain import Incident, Snapshot
+from .domain import Incident, Snapshot, utc_string
 from .security import COOKIE, Sessions, check_origin
-from .store import AssignmentConflict, Store
+from .store import AssignmentConflict, Store, utc_now
 
 
 class Login(BaseModel):
@@ -36,6 +37,12 @@ class Assignment(BaseModel):
     employee: str | None
     expectedEmployee: str | None
     expectedTime: str | None
+
+
+class Comment(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+    id: UUID
+    text: str = Field(min_length=1, max_length=2000)
 
 
 class Health(BaseModel):
@@ -154,12 +161,27 @@ def create_app(settings: Settings | None = None, *, provider_transport=None) -> 
                      includeSnapshot: bool = False):
         try:
             store = request.app.state.store
-            updated = await store.assign(incident_id, body.team, body.employee, body.expectedEmployee, body.expectedTime)
+            updated = await store.assign(incident_id, body.team, body.employee, body.expectedEmployee, body.expectedTime,
+                                         settings.demo_login)
             return store.snapshot() if includeSnapshot else updated
         except AssignmentConflict as exc:
             raise HTTPException(409, str(exc)) from exc
         except (OSError, ValueError) as exc:
             raise HTTPException(503, "Не удалось сохранить назначение. Попробуйте ещё раз.") from exc
+
+    @app.get("/api/incidents/{incident_id}/activity", tags=["incidents"])
+    async def activity(incident_id: str, request: Request, token: CurrentSession,
+                       before: Annotated[int | None, Query(gt=0, le=2**63-1)] = None):
+        store = request.app.state.store
+        incident_by_id(store.snapshot(), incident_id)
+        return store.activity.page(incident_id, before)
+
+    @app.post("/api/incidents/{incident_id}/comments", status_code=204, tags=["incidents"])
+    async def comment(incident_id: str, body: Comment, request: Request, token: CurrentSession):
+        store = request.app.state.store
+        incident_by_id(store.snapshot(), incident_id)
+        store.activity.comment(incident_id, body.id.hex, utc_string(utc_now()), settings.demo_login, body.text)
+        return Response(status_code=204)
 
     @app.post("/api/ai/summary", response_model=SummaryAnswer, tags=["ai"])
     async def summary(body: SummaryInput, request: Request, token: CurrentSession):

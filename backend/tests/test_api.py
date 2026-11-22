@@ -58,7 +58,33 @@ def test_assignment_persists_and_validates_team(source, monkeypatch):
         sign_in(client)
         assert client.get("/api/incidents/demo-001").json()["assignedGroupName"] == "Support"
         assert not client.get("/api/incidents").json()["groups"]["assigned"]
+        entries = client.get("/api/incidents/demo-001/activity").json()["entries"]
+        assert [entry["kind"] for entry in entries] == ["change", "first"]
+        assert entries[0]["author"] == CREDS["login"]
+        assert {"field":"assignedGroupName", "before":COORDINATORS, "after":"Support"} in entries[0]["body"]
     assert json.loads(source.read_text(encoding="utf-8")) == records
+
+
+def test_comments_are_private_to_incident_and_survive_restart(source, monkeypatch):
+    monkeypatch.setattr("app.store.RUNTIME", source.parent)
+    source.write_text(json.dumps([ROW, {**ROW,"id":"other"}]), encoding="utf-8")
+    url = "/api/incidents/demo-001/comments"
+    body = {"text":"  Связь проверили.  ", "id":"493b86cb-9d21-490a-abf3-de308874c882"}
+    with TestClient(create_app(settings(source))) as client:
+        assert client.post(url,json=body).status_code == 401
+        sign_in(client)
+        assert client.post(url,json={**body,"text":"   "}).status_code == 422
+        assert client.post(url,json=body).status_code == 204
+        assert client.post(url,json=body).status_code == 204
+        assert client.post("/api/incidents/missing/comments",json=body).status_code == 404
+    source.write_text(json.dumps([{**ROW,"stateEnum":"WorkInProgress"}, {**ROW,"id":"other"}]), encoding="utf-8")
+    with TestClient(create_app(settings(source))) as client:
+        sign_in(client)
+        log = client.get("/api/incidents/demo-001/activity").json()["entries"]
+        assert [row["kind"] for row in log] == ["change","comment","first"]
+        assert log[1]["author"] == CREDS["login"] and log[1]["body"] == "Связь проверили."
+        assert log[0]["author"] == "Источник"
+        assert client.get("/api/incidents/other/activity").json()["entries"][0]["kind"] == "first"
 
 
 def test_chat_and_dashboard_use_the_same_active_deadlines(tmp_path, monkeypatch):

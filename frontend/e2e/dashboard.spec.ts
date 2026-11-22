@@ -30,6 +30,13 @@ test('передача активного инцидента обновляет 
     await expect(detail.locator('.facts')).toContainText('Время назначения команде');
     await expect(detail.locator('.facts')).not.toContainText('Следующий шаг');
     await expect(detail.getByRole('button',{name:'Назначить команду'})).toHaveCount(0);
+    const log = detail.getByRole('region',{name:'История изменений'});
+    await expect(log).toContainText('Сервис платежей');
+    await log.getByLabel('Комментарий',{exact:true}).fill('Передали дежурному инженеру.');
+    await log.getByRole('button',{name:'Добавить комментарий'}).click();
+    await expect(log.locator('.activity-comment')).toHaveText('Передали дежурному инженеру.');
+    await detail.reload();
+    await expect(log.locator('.activity-comment')).toHaveText('Передали дежурному инженеру.');
     await expect(card.locator('.pill')).toHaveText('Назначен команде');
     await expect(card).toContainText('Сервис платежей');
     await expect(card.locator('.coordinator-since')).toHaveCount(0);

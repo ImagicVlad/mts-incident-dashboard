@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ChevronLeft, CornerUpRight, ExternalLink } from 'lucide-react';
+import { ChevronLeft, GitPullRequestArrow, ExternalLink } from 'lucide-react';
+import { IncidentActivity } from './IncidentActivity';
 import { FilterPicker } from './filters/FilterTools';
 import { active, api, errorText, finished, remaining, type Incident, type Snapshot } from './api';
 import { overviewStatus, Pill } from './Dashboard';
@@ -24,7 +25,7 @@ function Assignment({item, incidents}: {item: Incident; incidents: Incident[]}) 
   const [employee, setEmployee] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
-  if (!open) return <button className="button secondary assignment-start" onClick={()=>setOpen(true)}><CornerUpRight size={16}/>Назначить команду</button>;
+  if (!open) return <button className="button secondary assignment-start" onClick={()=>setOpen(true)}><GitPullRequestArrow size={16} aria-hidden="true"/>Назначить команду</button>;
   function options(values:(string | null)[]) {
     return [...new Set(values.filter((v): v is string => Boolean(v)))].sort((a,b)=>a.localeCompare(b,'ru')).map(value=>({value,label:value}));
   }
@@ -103,5 +104,6 @@ export function Details() {
       </div>
       {item.itsmUrl && /^https?:\/\//i.test(item.itsmUrl) ? <a className="button secondary" href={item.itsmUrl} target="_blank" rel="noopener noreferrer">Открыть в ITSM <ExternalLink size={16}/></a> : item.dataOrigin !== 'defense-scenario' && <p className="integration-note">Внешняя ITSM не подключена</p>}
     </aside></div></article>
+    <IncidentActivity key={item.id} item={item}/>
   </main>;
 }
