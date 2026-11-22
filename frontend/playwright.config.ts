@@ -6,6 +6,8 @@ import path from 'node:path';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const python = process.platform === 'win32' ? 'backend/.venv/Scripts/python.exe' : 'backend/.venv/bin/python';
 process.env.E2E_SOURCE ??= path.join(root, 'data', 'runtime', 'e2e-' + randomUUID() + '.json');
+process.env.E2E_COORDINATOR_PASSWORD ??= randomUUID();
+process.env.E2E_EXECUTOR_PASSWORD ??= randomUUID();
 
 export default defineConfig({
   testDir: './e2e', workers: 1, timeout: 60_000, expect: { timeout: 10_000 },

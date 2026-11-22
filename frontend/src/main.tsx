@@ -3,7 +3,7 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, ApiError, errorText, pathFor, type Account } from './api';
+import { api, ApiError, errorText, pathFor, sessionChangeKey, type Account } from './api';
 import './styles.css';
 import HandoffPoster from './login/HandoffPoster';
 import PriorityPoster from './login/PriorityPoster';
@@ -22,7 +22,7 @@ const Console = lazy(()=>import('./Console'));
 const Dashboard = lazy(()=>import('./Dashboard').then(m=>({default:m.Dashboard})));
 const Details = lazy(()=>import('./Details').then(m=>({default:m.Details})));
 function useSession() {
-  return useQuery({queryKey:['account'], staleTime:60_000, queryFn:async () => {
+  return useQuery({queryKey:['account'], staleTime:60_000, refetchOnWindowFocus:'always', queryFn:async () => {
     try { return await api<Account>('auth/me'); }
     catch (error) { if (error instanceof ApiError && error.status === 401) return null; throw error; }
   }});
@@ -34,10 +34,18 @@ function SessionBoundary({loginPage=false}: {loginPage?:boolean}) {
   useEffect(() => {
     const clear = () => {
       cache.removeQueries({queryKey:['live']});
+      cache.removeQueries({queryKey:['incident-activity']});
       cache.setQueryData(['account'],null);
     };
+    const sync = (event: StorageEvent) => {
+      if (event.key===sessionChangeKey) void cache.resetQueries({queryKey:['account']});
+    };
     window.addEventListener('session-expired',clear);
-    return () => window.removeEventListener('session-expired',clear);
+    window.addEventListener('storage',sync);
+    return () => {
+      window.removeEventListener('session-expired',clear);
+      window.removeEventListener('storage',sync);
+    };
   },[cache]);
   if (isPending) return <main className="container waiting" role="status">Проверяем сессию…</main>;
   if (isError) return <main className="container waiting"><h1>Сервер недоступен</h1><button className="button secondary" onClick={() => refetch()}>Повторить</button></main>;
@@ -50,27 +58,27 @@ function SessionBoundary({loginPage=false}: {loginPage?:boolean}) {
     return <Login variant={preview ? variant : 'workspace'} destination={target}/>;
   }
   if (!user) return <Navigate replace to="/login" state={{from:location.pathname + location.search + location.hash}}/>;
-  return <Console user={user}/>;
+  return <Console key={user.login} user={user}/>;
 }
 function Login({variant, destination}: {variant: LoginVariant; destination: string}) {
   const navigate = useNavigate();
   const cache = useQueryClient();
-  const [login,setLogin] = useState('coordinator.demo');
-  const [password,setPassword] = useState('mts-demo-local');
+  const [login,setLogin] = useState('');
+  const [password,setPassword] = useState('');
   const [showPassword,setShowPassword] = useState(false);
   const [pending,setPending] = useState(false);
   const [error,setError] = useState('');
   useEffect(() => {document.title = 'Вход · Пульт координатора';},[]);
   const form = <section className="auth-panel" aria-labelledby="login-title"><div className="auth-box">
-        {variant !== 'workspace' && <p className="eyebrow">{variant === 'compact' ? 'Пульт координатора' : 'Доступ координатора'}</p>}
+        {variant !== 'workspace' && <p className="eyebrow">Пульт координатора</p>}
         <h1 id="login-title">Вход в пульт</h1>
-        <p className="intro-note">Логин и пароль демоаккаунта уже заполнены.</p>
+        <p className="intro-note">Введите логин и пароль своей учётной записи.</p>
         <form onSubmit={async event => {
           event.preventDefault(); if (pending) return; setPending(true); setError('');
-          try {const account = await api<Account>('auth/login',{login,password}); cache.setQueryData(['account'],account); navigate(destination,{replace:true});}
+          try {const account = await api<Account>('auth/login',{login:login.trim(),password}); cache.setQueryData(['account'],account); navigate(destination,{replace:true});}
           catch (e) {setError(errorText(e));} finally {setPending(false);}
         }}>
-          <label>Логин<input name="login" autoComplete="username" value={login} onChange={e=>setLogin(e.target.value)} required/></label>
+          <label>Логин<input name="login" autoComplete="username" autoCapitalize="none" spellCheck={false} value={login} onChange={e=>setLogin(e.target.value)} required/></label>
           <div className="password-field">
             <label htmlFor="login-password">Пароль</label>
             <div className="password-control">

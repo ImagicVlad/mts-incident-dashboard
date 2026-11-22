@@ -37,7 +37,7 @@ export function Header({user}: {user:Account}) {
     <div className="dashboard-actions">
       <NotificationBell key={user.login} login={user.login}/>
       <Popover><PopoverTrigger asChild><button className="account-trigger" aria-label="Аккаунт">{user.displayName.split(/\s+/).map(t=>t[0]).slice(0,2).join('').toUpperCase()}</button></PopoverTrigger>
-        <PopoverContent aria-label="Аккаунт" className="account-panel"><h2>{user.displayName}</h2><p>Координатор массовых инцидентов</p><p className="account-login">{user.login}</p>
+        <PopoverContent aria-label="Аккаунт" className="account-panel"><h2>{user.displayName}</h2><p>{user.role==='coordinator'?'Координатор':'Исполнитель'}</p><p className="account-login">{user.login}</p>
           {error && <p role="alert" className="form-error">{error}</p>}
           <button className="logout" onClick={async()=>{try {await api('auth/logout',{}); window.dispatchEvent(new Event('session-expired')); navigate('/login',{replace:true});} catch(e){setError(errorText(e));}}}>Выйти из аккаунта</button>
         </PopoverContent></Popover>

@@ -1,3 +1,4 @@
+import { signIn } from './auth';
 import { expect, test } from '@playwright/test';
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import { displayFormats } from '../src/api';
@@ -8,6 +9,31 @@ async function replace(contents: string) {
   await rename(file + '.writing', file);
 }
 
+test('исполнитель входит в пустую форму, видит свою роль и комментирует без возможности назначения', async ({page}) => {
+  const original = await readFile(file, 'utf8');
+  try {
+    const issue = {id:'TEST-ROLE',header:'Проверка роли',stateEnum:'Assigned',priorityId:4,
+      assignedGroupName:'КЦ ИТ Координаторы Массовых Инцидентов'};
+    await replace(JSON.stringify([issue]));
+    await page.goto('/login');
+    await expect(page.getByLabel('Логин',{exact:true})).toHaveValue('');
+    await expect(page.getByLabel('Пароль',{exact:true})).toHaveValue('');
+    await signIn(page,'executor');
+    await page.getByRole('button',{name:'Аккаунт',exact:true}).click();
+    await expect(page.locator('.account-panel')).toContainText('Тестовый исполнитель');
+    await expect(page.locator('.account-panel')).toContainText('Исполнитель');
+    await page.keyboard.press('Escape');
+    await page.getByTestId('group-assigned').getByRole('link').click();
+    await expect(page.getByRole('heading',{name:issue.header,exact:true,level:1})).toBeVisible();
+    await expect(page.getByRole('button',{name:'Назначить команду'})).toHaveCount(0);
+    const log = page.getByRole('region',{name:'История изменений'});
+    await log.getByLabel('Комментарий',{exact:true}).fill('Результат проверки исполнителя.');
+    await log.getByRole('button',{name:'Добавить комментарий'}).click();
+    const entry = log.locator('li').filter({hasText:'Результат проверки исполнителя.'});
+    await expect(entry).toContainText('e2e.executor');
+  } finally { await replace(original); }
+});
+
 test('передача активного инцидента обновляет детали и дашборд даже при задержке SSE в карточке', async ({page}) => {
   const original = await readFile(file, 'utf8');
   const issue = {id:'TEST-HANDOFF', stateEnum:'Assigned', state:'Назначен', priorityId:4,
@@ -15,7 +41,7 @@ test('передача активного инцидента обновляет 
   try {
     await replace(JSON.stringify([issue, {id:'TEAM-DIRECTORY', stateEnum:'Closed', assignedGroupName:'Сервис платежей'}]));
     await page.goto('/login');
-    await page.getByRole('button', {name:'Войти',exact:true}).click();
+    await signIn(page);
     const card = page.getByTestId('group-critical').locator('[data-incident-id="TEST-HANDOFF"]');
     await expect(card).toContainText('У координаторов с');
     const detail = await page.context().newPage();
@@ -72,7 +98,7 @@ test('срочные события всплывают один раз, прос
     await page.goto('/login');
     await Promise.all([
       page.waitForResponse(response => response.url().endsWith('/api/incidents/events')),
-      page.getByRole('button', {name: 'Войти', exact: true}).click(),
+      signIn(page),
     ]);
     await bell.click();
     await page.keyboard.press('Escape');
@@ -128,7 +154,7 @@ test('краткие карточки показывают команду и ж�
     await replace(JSON.stringify([urgent, coordinator, sparse, review]));
     await page.clock.install();
     await page.goto('/login');
-    await page.getByRole('button', {name: 'Войти', exact: true}).click();
+    await signIn(page);
     const overdue = card('critical', urgent.id);
     const high = card('high', coordinator.id);
     const research = card('review', review.id);
@@ -196,7 +222,7 @@ test('название команды сокращается по ширине �
   try {
     await replace(JSON.stringify([long, short, ...others]));
     await page.goto('/login');
-    await page.getByRole('button', {name: 'Войти', exact: true}).click();
+    await signIn(page);
     await expect(value).toHaveText(team);
     await expect(value).toHaveAttribute('title', team);
     await expect(value).toHaveCSS('text-overflow', 'ellipsis');
@@ -235,7 +261,7 @@ test('сводка показывает пример назначения и с�
       status: 'ok', aiConfigured: true, displayTimezone: 'Europe/Moscow',
     }}));
     await page.goto('/login');
-    await page.getByRole('button', {name: 'Войти', exact: true}).click();
+    await signIn(page);
     await expect(page).toHaveURL(/\/dashboard$/);
     await page.goto('/incidents/' + incident.id);
     await expect(page.getByRole('heading', {name: 'Данные инцидента'})).toBeVisible();
@@ -280,7 +306,7 @@ test('две вкладки получают изменения, пережив�
   try {
     await page.goto('/dashboard');
     await expect(page).toHaveURL(/\/login$/);
-    await page.getByRole('button',{name:'Войти',exact:true}).click();
+    await signIn(page);
     await expect(page).toHaveURL(/\/dashboard$/);
     const high = page.getByTestId('group-high');
     await expect(high.locator('[data-incident-id]')).toHaveCount(2);
@@ -341,7 +367,7 @@ test('инцидент меняет очередь при достижении �
     row.priorityId === 3 && row.stateEnum === 'WorkInProgress');
   try {
     await page.goto('/login');
-    await page.getByRole('button', {name:'Войти', exact:true}).click();
+    await signIn(page);
     const critical = page.getByTestId('group-critical');
     await expect(critical).toBeVisible();
     const high = page.getByTestId('group-high');
@@ -404,7 +430,7 @@ test('команда координаторов и стадия исследов
   try {
     await publish();
     await page.goto('/login');
-    await page.getByRole('button', {name:'Войти', exact:true}).click();
+    await signIn(page);
     await expect(critical).toBeVisible();
     await expect(assigned).toHaveCount(0);
 

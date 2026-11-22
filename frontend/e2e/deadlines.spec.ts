@@ -1,3 +1,4 @@
+import { signIn } from './auth';
 import { expect, test as base, type Locator, type Page } from '@playwright/test';
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import type { Incident } from '../src/api';
@@ -40,7 +41,7 @@ const test = base.extend<{ source: TestSource }>({
 
 async function login(page: Page) {
   await page.goto('/login');
-  await page.getByRole('button', {name: 'Войти', exact: true}).click();
+  await signIn(page);
   await expect(page.locator('.deadline-focus')).toBeVisible();
 }
 

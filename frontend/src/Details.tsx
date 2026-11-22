@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useOutletContext, useParams } from 'react-router-dom';
 import { ChevronLeft, ExternalLink } from 'lucide-react';
 import { IncidentActivity } from './IncidentActivity';
 import { FilterPicker } from './filters/FilterTools';
@@ -7,6 +7,7 @@ import { active, api, errorText, finished, remaining, type Incident, type Snapsh
 import { overviewStatus, Pill } from './Dashboard';
 import { Summary } from './Intelligence';
 import { useLive } from './live';
+import type { ConsoleOutlet } from './Console';
 
 function observeDataHeight(paper: HTMLElement | null) {
   const grid = paper?.parentElement;
@@ -61,6 +62,7 @@ function Assignment({item, incidents}: {item: Incident; incidents: Incident[]}) 
 
 export function Details() {
   const {id} = useParams();
+  const {user} = useOutletContext<ConsoleOutlet>();
   const {snapshot,now,bootstrapError,formats:{stamp,time,zoneLabel}} = useLive();
   const item = snapshot?.incidents.find(i=>i.id===id);
   useEffect(()=>{document.title = (item?.header || 'Инцидент')+' · Пульт координатора';},[item?.header]);
@@ -91,7 +93,7 @@ export function Details() {
       <section className="record-text"><h3>Описание</h3><p>{description || 'Описание отсутствует.'}</p></section>
       {item.solution && <section className="record-text"><h3>Решение из источника</h3><p>{item.solution}</p></section>}
       {item.diagnostics?.length>0 && <details className="record-text"><summary>Замечания к записи</summary><ul>{item.diagnostics.map((d,k)=><li key={k}>{d}</li>)}</ul></details>}
-      {onCoordinators && snapshot && <footer className="assignment-footer">
+      {onCoordinators && user.role==='coordinator' && snapshot && <footer className="assignment-footer">
         <Assignment key={JSON.stringify([item.id,item.assignedEmployee,item.lastAssignmentToTeamDateTime])} item={item} incidents={snapshot.incidents}/>
       </footer>}
     </section><aside><div className="record-panels">

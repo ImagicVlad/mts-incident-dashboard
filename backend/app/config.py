@@ -17,9 +17,7 @@ class Settings(BaseSettings):
     display_timezone: str = "Europe/Moscow"
     itsm_url_template: str = ""
     watch_polling: bool = False
-    demo_login: str = Field(default="coordinator.demo", min_length=1)
-    demo_password: SecretStr = SecretStr("mts-demo-local")
-    demo_password_hash: SecretStr | None = None
+    accounts_db: Path = PROJECT_DIR / "data" / "runtime" / "accounts.sqlite3"
     session_ttl_seconds: int = Field(default=28800, ge=1, le=604800)
     cookie_secure: bool = False
     allowed_origins: str = ",".join(
@@ -34,6 +32,10 @@ class Settings(BaseSettings):
     llm_requests_per_minute: int = Field(12, ge=1, le=600)
     llm_max_concurrent: int = Field(2, ge=1, le=16)
     llm_summary_ttl_seconds: int = Field(180, ge=1, le=3600)
+
+    @property
+    def accounts_path(self) -> Path:
+        return (BACKEND_DIR / self.accounts_db).resolve()
 
     @property
     def source_path(self) -> Path:

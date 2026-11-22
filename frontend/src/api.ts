@@ -21,7 +21,7 @@ export interface Snapshot {
   groups: Record<GroupId, string[]>; counts: Record<GroupId, number>;
   notifications: Notice[]; diagnostics: string[];
 }
-export interface Account { login: string; displayName: string }
+export interface Account { login: string; displayName: string; role: 'coordinator' | 'executor' }
 export interface Answer { answer: string; epoch: string; snapshotVersion: number; asOf: string; stale?: boolean }
 export interface SummaryAnswer extends Answer {
   assessment: {
@@ -31,6 +31,7 @@ export interface SummaryAnswer extends Answer {
 }
 export interface Message { role: 'assistant' | 'user'; content: string }
 export const pathFor = (id: string) => '/incidents/' + encodeURIComponent(id);
+export const sessionChangeKey = 'mts.auth.sessionChange';
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
@@ -46,6 +47,9 @@ export async function api<T>(url: string, body?: unknown, signal?: AbortSignal):
       window.dispatchEvent(new Event('session-expired'));
     }
     throw new ApiError(response.status, typeof payload.detail === 'string' ? payload.detail : 'Не удалось выполнить запрос.');
+  }
+  if (url === 'auth/login' || url === 'auth/logout') {
+    try {localStorage.setItem(sessionChangeKey, String(Date.now()));} catch { /* Other tabs recheck on focus. */ }
   }
   return response.status === 204 ? undefined as T : response.json();
 }

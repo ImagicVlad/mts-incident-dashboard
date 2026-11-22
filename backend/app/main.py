@@ -13,11 +13,12 @@ from fastapi.security import APIKeyCookie
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
+from .accounts import Profile
 from .ai import AIAnswer, AIService, ChatInput, SummaryAnswer, SummaryInput, incident_by_id
 from .config import Settings
 from .demo_data import prepare_default_demo
 from .domain import Incident, Snapshot, utc_string
-from .security import COOKIE, Sessions, check_origin
+from .security import COOKIE, Session, Sessions, check_origin
 from .store import AssignmentConflict, Store, utc_now
 
 
@@ -25,11 +26,6 @@ class Login(BaseModel):
     model_config = ConfigDict(extra="forbid")
     login: str = Field(min_length=1, max_length=128)
     password: SecretStr = Field(min_length=1, max_length=256)
-
-
-class Profile(BaseModel):
-    login: str
-    displayName: str
 
 
 class Assignment(BaseModel):
@@ -54,13 +50,14 @@ class Health(BaseModel):
 cookie_auth = APIKeyCookie(name=COOKIE, auto_error=False)
 
 
-async def require_session(request: Request, token: Annotated[str | None, Security(cookie_auth)]) -> str:
-    if not request.app.state.sessions.active(token):
-        raise HTTPException(401, "Войдите в аккаунт координатора.")
-    return token
+async def require_session(request: Request, token: Annotated[str | None, Security(cookie_auth)]) -> Session:
+    session = request.app.state.sessions.find(token)
+    if session is None:
+        raise HTTPException(401, "Войдите в аккаунт.")
+    return session
 
 
-CurrentSession = Annotated[str, Depends(require_session)]
+CurrentSession = Annotated[Session, Depends(require_session)]
 
 
 def create_app(settings: Settings | None = None, *, provider_transport=None) -> FastAPI:
@@ -106,42 +103,42 @@ def create_app(settings: Settings | None = None, *, provider_transport=None) -> 
     @app.post("/api/auth/login", response_model=Profile, tags=["auth"])
     async def login(body: Login, request: Request, response: Response):
         sessions = request.app.state.sessions
-        token = await sessions.authenticate(body.login, body.password.get_secret_value())
-        sessions.expires.pop(request.cookies.get(COOKIE), None)
-        response.set_cookie(COOKIE, token, max_age=settings.session_ttl_seconds, path="/api",
+        session = await sessions.authenticate(body.login, body.password.get_secret_value())
+        sessions.revoke(request.cookies.get(COOKIE))
+        response.set_cookie(COOKIE, session.token, max_age=settings.session_ttl_seconds, path="/api",
                             httponly=True, secure=settings.cookie_secure, samesite="lax")
-        return Profile(login=settings.demo_login, displayName="Координатор смены")
+        return session.profile
 
     @app.get("/api/auth/me", response_model=Profile, tags=["auth"])
-    async def me(token: CurrentSession):
-        return Profile(login=settings.demo_login, displayName="Координатор смены")
+    async def me(session: CurrentSession):
+        return session.profile
 
     @app.post("/api/auth/logout", status_code=204, tags=["auth"])
-    async def logout(token: CurrentSession, request: Request):
-        request.app.state.sessions.expires.pop(token, None)
+    async def logout(session: CurrentSession, request: Request):
+        request.app.state.sessions.revoke(session.token)
         response = Response(status_code=204)
         response.delete_cookie(COOKIE, path="/api", httponly=True, secure=settings.cookie_secure,
                                samesite="lax")
         return response
 
     @app.get("/api/incidents", response_model=Snapshot, tags=["incidents"])
-    async def snapshot(request: Request, token: CurrentSession):
+    async def snapshot(request: Request, session: CurrentSession):
         return request.app.state.store.snapshot()
 
     @app.get("/api/incidents/events", response_class=EventSourceResponse, tags=["incidents"],
              description="При подключении и после изменений приходит событие snapshot с полным снимком.")
-    async def events(request: Request, token: CurrentSession) -> AsyncIterator[ServerSentEvent]:
+    async def events(request: Request, session: CurrentSession) -> AsyncIterator[ServerSentEvent]:
         sessions = request.app.state.sessions
         updates = request.app.state.store.subscribe()
         next_update = asyncio.create_task(anext(updates))
         try:
-            while sessions.active(token):
-                remaining = sessions.expires[token] - time.monotonic()
+            while sessions.find(session.token):
+                remaining = session.expires_at - time.monotonic()
                 done, _ = await asyncio.wait({next_update}, timeout=max(0, min(2.0, remaining)))
                 if not done:
                     continue
                 snapshot = next_update.result()
-                if not sessions.active(token):
+                if not sessions.find(session.token):
                     break
                 yield ServerSentEvent(event="snapshot", data=snapshot, retry=2000,
                                       id=f"{snapshot['epoch']}/{snapshot['snapshotVersion']}")
@@ -153,16 +150,18 @@ def create_app(settings: Settings | None = None, *, provider_transport=None) -> 
             await updates.aclose()
 
     @app.get("/api/incidents/{incident_id}", response_model=Incident, tags=["incidents"])
-    async def incident(incident_id: str, request: Request, token: CurrentSession):
+    async def incident(incident_id: str, request: Request, session: CurrentSession):
         return incident_by_id(request.app.state.store.snapshot(), incident_id)
 
     @app.post("/api/incidents/{incident_id}/assignment", response_model=Snapshot | Incident, tags=["incidents"])
-    async def assign(incident_id: str, body: Assignment, request: Request, token: CurrentSession,
+    async def assign(incident_id: str, body: Assignment, request: Request, session: CurrentSession,
                      includeSnapshot: bool = False):
+        if session.profile.role != "coordinator":
+            raise HTTPException(403, "Назначение команды доступно координатору.")
         try:
             store = request.app.state.store
             updated = await store.assign(incident_id, body.team, body.employee, body.expectedEmployee, body.expectedTime,
-                                         settings.demo_login)
+                                         session.profile.login)
             return store.snapshot() if includeSnapshot else updated
         except AssignmentConflict as exc:
             raise HTTPException(409, str(exc)) from exc
@@ -170,25 +169,25 @@ def create_app(settings: Settings | None = None, *, provider_transport=None) -> 
             raise HTTPException(503, "Не удалось сохранить назначение. Попробуйте ещё раз.") from exc
 
     @app.get("/api/incidents/{incident_id}/activity", tags=["incidents"])
-    async def activity(incident_id: str, request: Request, token: CurrentSession,
+    async def activity(incident_id: str, request: Request, session: CurrentSession,
                        before: Annotated[int | None, Query(gt=0, le=2**63-1)] = None):
         store = request.app.state.store
         incident_by_id(store.snapshot(), incident_id)
         return store.activity.page(incident_id, before)
 
     @app.post("/api/incidents/{incident_id}/comments", status_code=204, tags=["incidents"])
-    async def comment(incident_id: str, body: Comment, request: Request, token: CurrentSession):
+    async def comment(incident_id: str, body: Comment, request: Request, session: CurrentSession):
         store = request.app.state.store
         incident_by_id(store.snapshot(), incident_id)
-        store.activity.comment(incident_id, body.id.hex, utc_string(utc_now()), settings.demo_login, body.text)
+        store.activity.comment(incident_id, body.id.hex, utc_string(utc_now()), session.profile.login, body.text)
         return Response(status_code=204)
 
     @app.post("/api/ai/summary", response_model=SummaryAnswer, tags=["ai"])
-    async def summary(body: SummaryInput, request: Request, token: CurrentSession):
+    async def summary(body: SummaryInput, request: Request, session: CurrentSession):
         return await request.app.state.ai.summary(body.incidentId)
 
     @app.post("/api/ai/chat", response_model=AIAnswer, tags=["ai"])
-    async def chat(body: ChatInput, request: Request, token: CurrentSession):
+    async def chat(body: ChatInput, request: Request, session: CurrentSession):
         return await request.app.state.ai.chat(body)
 
     return app

@@ -1,3 +1,4 @@
+import { signIn } from './auth';
 import { expect, test as base, type Locator, type Page } from '@playwright/test';
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import { displayFormats, type Incident, type Snapshot } from '../src/api';
@@ -33,7 +34,7 @@ const test=base.extend<{records:Incident[]}>({records:async({},use)=>{
 }});
 async function login(page:Page) {
   await page.goto('/login');
-  await page.getByRole('button',{name:'Войти',exact:true}).click();
+  await signIn(page);
   await expect(page.getByTestId('group-critical').locator('.incident').first()).toBeVisible();
 }
 async function open(page:Page) {
@@ -250,7 +251,7 @@ test('текущие фильтры и сортировка из прежнег�
   await login(page);expect(records.length).toBe(8);
   const current={...defaults,groups:['critical','assigned'],groupMode:'all',sla:'overdue',sort:[{field:'upcoming',dir:'asc'}]};
   const saved={...defaults,groups:['high','assigned'],groupMode:'all'};
-  await page.evaluate(p=>localStorage.setItem('mts.dashboard.views.v1.coordinator.demo',JSON.stringify(p)),{
+  await page.evaluate(p=>localStorage.setItem('mts.dashboard.views.v1.e2e.coordinator',JSON.stringify(p)),{
     current,views:[{id:'old-view',name:'Очереди смены',settings:saved}],
   });
   await page.reload();

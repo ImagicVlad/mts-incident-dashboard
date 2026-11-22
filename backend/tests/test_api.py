@@ -7,7 +7,9 @@ import httpx
 import pytest
 import uvicorn
 from fastapi.testclient import TestClient
+from argon2 import PasswordHasher
 
+from app.accounts import Accounts
 from app.config import Settings
 from app.ai import Message, chat_context
 from app.domain import COORDINATORS, normalize_records
@@ -25,12 +27,13 @@ NOTES = {"situation": "Зачисление задерживается.", "impac
 def source(tmp_path):
     path = tmp_path / "records.json"
     path.write_text(json.dumps([ROW]), encoding="utf-8")
+    Accounts(tmp_path / "accounts.sqlite3").create(CREDS["login"], "Оператор смены", "coordinator", CREDS["password"])
     return path
 
 
 def settings(source, **overrides):
-    values = dict(incidents_file=str(source), demo_login=CREDS["login"], demo_password=CREDS["password"],
-                  demo_password_hash=None, llm_api_key=None, watch_polling=True)
+    values = dict(incidents_file=str(source), accounts_db=source.parent / "accounts.sqlite3",
+                  llm_api_key=None, watch_polling=True)
     return Settings(_env_file=None, **(values | overrides))
 
 
@@ -123,7 +126,7 @@ def test_session_and_read_api(source):
         assert client.post("/api/auth/login", json=CREDS, headers={"Origin": "https://othersite.invalid"}).status_code == 403
         cookie = sign_in(client).headers["set-cookie"].lower()
         assert "httponly" in cookie and "samesite=lax" in cookie and "path=/api" in cookie
-        assert client.get("/api/auth/me").json()["login"] == "operator"
+        assert client.get("/api/auth/me").json() == {"login":"operator", "displayName":"Оператор смены", "role":"coordinator"}
         assert client.get("/api/incidents").json()["counts"]["critical"] == 1
         assert client.get("/api/incidents/demo-001").json()["header"] == ROW["header"]
         assert client.get("/api/incidents/missing").status_code == 404
@@ -135,14 +138,50 @@ def test_session_and_read_api(source):
 
 
 def test_missing_file_and_login_hash(source):
-    from argon2 import PasswordHasher
-    options = settings(source.with_suffix(".missing"), demo_password="unused",
-                       demo_password_hash=PasswordHasher().hash(CREDS["password"]))
+    options = settings(source.with_suffix(".missing"))
+    _, password_hash = Accounts(options.accounts_path).credentials(CREDS["login"])
+    assert PasswordHasher().verify(password_hash, CREDS["password"])
     with TestClient(create_app(options)) as client:
         sign_in(client)
         snap = client.get("/api/incidents").json()
         assert (snap["hasSnapshot"], snap["sourceStatus"], snap["demoMode"]) == (False, "error", False)
         assert client.get("/api/incidents/missing").status_code == 503
+
+
+def test_empty_account_database_has_no_implicit_login(source):
+    with TestClient(create_app(settings(source, accounts_db=source.parent / "empty.sqlite3"))) as client:
+        assert client.post("/api/auth/login", json=CREDS).status_code == 401
+        assert client.get("/api/auth/me").status_code == 401
+
+
+def test_executor_role_and_comment_identity(source, monkeypatch):
+    monkeypatch.setattr("app.store.RUNTIME", source.parent)
+    options = settings(source)
+    engineer = {"login": "engineer", "password": "engineer-test-only"}
+    Accounts(options.accounts_path).create(engineer["login"], "Инженер смены", "executor", engineer["password"])
+    source.write_text(json.dumps([{**ROW, "assignedGroupName":COORDINATORS},
+                                  {**ROW, "id":"team", "assignedGroupName":"Support"}]), encoding="utf-8")
+    with TestClient(create_app(options)) as client:
+        # Independent browser sessions must retain their own identity and role.
+        sign_in(client)
+        operator_cookies = dict(client.cookies)
+        client.cookies.clear()
+        profile = {"login":"engineer", "displayName":"Инженер смены", "role":"executor"}
+        assert client.post("/api/auth/login", json=engineer).json() == profile
+        assert client.get("/api/auth/me").json() == profile
+        assert client.get("/api/incidents/demo-001").status_code == 200
+        assignment = {"team":"Support", "employee":None, "expectedEmployee":None, "expectedTime":None}
+        url = "/api/incidents/demo-001"
+        assert client.post(url + "/assignment", json=assignment).status_code == 403
+        assert client.get(url).json()["assignedGroupName"] == COORDINATORS
+        comment = {"id":"7dd0a087-3272-4e32-84b1-06ddd8607169", "text":"Проверка выполнена"}
+        assert client.post(url + "/comments", json=comment).status_code == 204
+        assert client.get(url + "/activity").json()["entries"][0]["author"] == engineer["login"]
+        assert client.post("/api/auth/logout").status_code == 204
+        client.cookies.update(operator_cookies)
+        assert client.get("/api/auth/me").json()["role"] == "coordinator"
+        assert client.post(url + "/assignment", json=assignment).status_code == 200
+        assert client.get(url + "/activity").json()["entries"][0]["author"] == CREDS["login"]
 
 
 def test_summary_cache_chat_context_and_input_contract(source):

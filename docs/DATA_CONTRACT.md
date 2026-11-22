@@ -32,7 +32,7 @@ DTO сохраняет строковые идентификаторы, осно
 | Метод и путь | Тело / ответ |
 | --- | --- |
 | POST /api/auth/login | Принимает login и password. Возвращает профиль и устанавливает HttpOnly cookie. |
-| GET /api/auth/me | Профиль текущей сессии с login и displayName. |
+| GET /api/auth/me | Профиль текущей сессии с login, displayName и role (coordinator или executor). Такой же профиль возвращается при входе. |
 | POST /api/auth/logout | Отзывает сессию; ответ 204. |
 | GET /api/health | Доступность HTTP, флаг aiConfigured и displayTimezone. |
 | GET /api/incidents | Полный снимок с incidents, groups, counts, notifications и диагностикой. |
@@ -40,7 +40,7 @@ DTO сохраняет строковые идентификаторы, осно
 | GET /api/incidents/{id} | Карточка указанной записи. |
 | GET /api/incidents/{id}/activity | Журнал от новых записей к старым. До 30 записей за запрос, параметр before берётся из next. |
 | POST /api/incidents/{id}/comments | Текст 1–2000 символов и UUID сообщения для защиты от дублей при повторе. Автор определяется сервером по учётной записи. |
-| POST /api/incidents/{id}/assignment | Только для очереди координаторов. Принимает team, employee (или null), expectedEmployee и expectedTime из открытой карточки. Конфликт назначения возвращает 409. |
+| POST /api/incidents/{id}/assignment | Требуется роль coordinator и карточка из очереди координаторов. Принимает team, employee (или null), expectedEmployee и expectedTime из открытой карточки. Исполнителю возвращается 403, при конфликте назначения — 409. |
 | POST /api/ai/summary | Принимает incidentId. |
 | POST /api/ai/chat | Принимает messages из пар role/content; до 9 сообщений и 2000 символов в вопросе. |
 

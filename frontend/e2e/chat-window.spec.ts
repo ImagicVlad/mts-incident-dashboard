@@ -1,3 +1,4 @@
+import { signIn } from './auth';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
 async function openDashboard(page: Page) {
@@ -5,7 +6,7 @@ async function openDashboard(page: Page) {
     status: 'ok', aiConfigured: true, displayTimezone: 'Europe/Moscow',
   }}));
   await page.goto('/login');
-  await page.getByRole('button', {name: 'Войти', exact: true}).click();
+  await signIn(page);
   await expect(page).toHaveURL(/\/dashboard$/);
 }
 

@@ -2,38 +2,57 @@ import asyncio
 import secrets
 import time
 from collections import deque
+from dataclasses import dataclass
 
-from argon2 import PasswordHasher, extract_parameters
-from argon2.exceptions import VerificationError
+from argon2 import PasswordHasher
+from argon2.exceptions import InvalidHashError, VerificationError
 from fastapi import HTTPException, Request
 
+from .accounts import Accounts, Profile
 from .config import Settings
 
 COOKIE = "coordinator_session"
+
+
+@dataclass(frozen=True)
+class Session:
+    token: str
+    profile: Profile
+    expires_at: float
 
 
 class Sessions:
     def __init__(self, settings: Settings):
         self.settings = settings
         self.hasher = PasswordHasher()
-        self.password_hash = (
-            settings.demo_password_hash.get_secret_value() if settings.demo_password_hash
-            else self.hasher.hash(settings.demo_password.get_secret_value())
-        )
-        extract_parameters(self.password_hash)
-        self.expires: dict[str, float] = {}
+        self.accounts = Accounts(settings.accounts_path)
+        # Unknown logins follow the same Argon2 verification path.
+        self.dummy_hash = self.hasher.hash(secrets.token_urlsafe(32))
+        self._sessions: dict[str, Session] = {}
         self.attempts: deque[float] = deque()
         self.verifiers = asyncio.Semaphore(2)
 
-    def active(self, token: str | None) -> bool:
-        if not token:
-            return False
-        if self.expires.get(token, 0) <= time.monotonic():
-            self.expires.pop(token, None)
-            return False
-        return True
+    def find(self, token: str | None) -> Session | None:
+        session = self._sessions.get(token) if token else None
+        if session and session.expires_at <= time.monotonic():
+            self.revoke(session.token)
+            return None
+        return session
 
-    async def authenticate(self, login: str, password: str) -> str:
+    def revoke(self, token: str | None) -> None:
+        if token:
+            self._sessions.pop(token, None)
+
+    def _verify(self, login: str, password: str) -> Profile | None:
+        credentials = self.accounts.credentials(login)
+        password_hash = credentials[1] if credentials else self.dummy_hash
+        try:
+            self.hasher.verify(password_hash, password)
+        except (VerificationError, InvalidHashError):
+            return None
+        return credentials[0] if credentials else None
+
+    async def authenticate(self, login: str, password: str) -> Session:
         now = time.monotonic()
         while self.attempts and now - self.attempts[0] >= 60:
             self.attempts.popleft()
@@ -41,19 +60,17 @@ class Sessions:
             raise HTTPException(429, "Слишком много попыток входа. Попробуйте позже.")
         self.attempts.append(now)
         async with self.verifiers:
-            try:
-                valid = await asyncio.to_thread(self.hasher.verify, self.password_hash, password)
-            except VerificationError:
-                valid = False
-        if not valid or login != self.settings.demo_login:
+            profile = await asyncio.to_thread(self._verify, login, password)
+        if profile is None:
             raise HTTPException(401, "Неверный логин или пароль.")
-        for key in list(self.expires):
-            self.active(key)
-        if len(self.expires) >= 512:
-            self.expires.pop(next(iter(self.expires)))
+        for key in list(self._sessions):
+            self.find(key)
+        if len(self._sessions) >= 512:
+            self.revoke(next(iter(self._sessions)))
         token = secrets.token_urlsafe(32)
-        self.expires[token] = time.monotonic() + self.settings.session_ttl_seconds
-        return token
+        session = Session(token, profile, time.monotonic() + self.settings.session_ttl_seconds)
+        self._sessions[token] = session
+        return session
 
 
 async def check_origin(request: Request):

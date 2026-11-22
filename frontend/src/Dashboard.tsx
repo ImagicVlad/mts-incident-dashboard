@@ -4,6 +4,7 @@ import { ChevronDown } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { active, finished, pathFor, remaining, type GroupId, type Incident } from './api';
 import { useLive } from './live';
+import type { ConsoleOutlet } from './Console';
 import { DeadlineFocus } from './DeadlineFocus';
 import { ActiveFilters } from './filters/FilterTools';
 import { useViews } from './filters/ViewContext';
@@ -66,7 +67,7 @@ function Card({item,group,now,animate,priority,onCoordinators}:{item:Incident;gr
   </motion.div>;
 }
 export function Dashboard() {
-  const setChatDock = useOutletContext<(node: HTMLDivElement | null) => void>();
+  const {setChatDock} = useOutletContext<ConsoleOutlet>();
   const {snapshot,now,newCards,bootstrapError} = useLive();
   const {settings,query,result,index,clearFilters,patch,reset}=useViews();
   const deadlineHeading = useRef<HTMLHeadingElement>(null);
