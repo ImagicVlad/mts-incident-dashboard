@@ -52,12 +52,13 @@ class Store:
         self._updated_at: str | None = None
         self._error: str | None = "Данные ещё не загружены."
         self._signature = None
-        self._changed: set[asyncio.Event] = set()
+        self._changed: dict[asyncio.Event, str | None] = {}
+        self._read_versions: dict[str, int] = {}
         self._stopping = asyncio.Event()
         self._lock = asyncio.Lock()
         self._task: asyncio.Task | None = None
 
-    def snapshot(self) -> dict:
+    def snapshot(self, login: str | None = None) -> dict:
         now = utc_now()
         return {
             "epoch": self.epoch,
@@ -74,20 +75,30 @@ class Store:
             "groups": self._groups,
             "counts": {key: len(ids) for key, ids in self._groups.items()},
             "notifications": list(self._events),
+            "unreadIncidentIds": ([id_ for id_ in self.activity.unread(login) if id_ in self._items]
+                                  if login is not None and self._loaded_at is not None else []),
+            "readVersion": self._read_versions.get(login, 0) if login is not None else 0,
             "diagnostics": self._diagnostics,
         }
 
-    async def subscribe(self) -> AsyncIterator[dict]:
+    async def subscribe(self, login: str | None = None) -> AsyncIterator[dict]:
         # A single flag per connection coalesces publications for slow clients.
         changed = asyncio.Event()
-        self._changed.add(changed)
+        self._changed[changed] = login
         try:
             while not self._stopping.is_set():
                 changed.clear()
-                yield self.snapshot()
+                yield self.snapshot(login)
                 await changed.wait()
         finally:
-            self._changed.discard(changed)
+            self._changed.pop(changed, None)
+
+    def mark_read(self, login: str, incident_id: str) -> None:
+        if self.activity.mark_read(login, incident_id):
+            self._read_versions[login] = self._read_versions.get(login, 0) + 1
+            for changed, subscriber in self._changed.items():
+                if subscriber == login:
+                    changed.set()
 
     def _publish(self) -> None:
         self._version += 1

@@ -123,13 +123,13 @@ def create_app(settings: Settings | None = None, *, provider_transport=None) -> 
 
     @app.get("/api/incidents", response_model=Snapshot, tags=["incidents"])
     async def snapshot(request: Request, session: CurrentSession):
-        return request.app.state.store.snapshot()
+        return request.app.state.store.snapshot(session.profile.login)
 
     @app.get("/api/incidents/events", response_class=EventSourceResponse, tags=["incidents"],
              description="При подключении и после изменений приходит событие snapshot с полным снимком.")
     async def events(request: Request, session: CurrentSession) -> AsyncIterator[ServerSentEvent]:
         sessions = request.app.state.sessions
-        updates = request.app.state.store.subscribe()
+        updates = request.app.state.store.subscribe(session.profile.login)
         next_update = asyncio.create_task(anext(updates))
         try:
             while sessions.find(session.token):
@@ -153,6 +153,14 @@ def create_app(settings: Settings | None = None, *, provider_transport=None) -> 
     async def incident(incident_id: str, request: Request, session: CurrentSession):
         return incident_by_id(request.app.state.store.snapshot(), incident_id)
 
+    @app.post("/api/incidents/{incident_id:path}/read", status_code=204, tags=["incidents"])
+    async def read_incident(incident_id: str, request: Request, session: CurrentSession):
+        try:
+            request.app.state.store.mark_read(session.profile.login, incident_id)
+        except KeyError:
+            raise HTTPException(404, "Инцидент не найден.") from None
+        return Response(status_code=204)
+
     @app.post("/api/incidents/{incident_id}/assignment", response_model=Snapshot | Incident, tags=["incidents"])
     async def assign(incident_id: str, body: Assignment, request: Request, session: CurrentSession,
                      includeSnapshot: bool = False):
@@ -162,7 +170,7 @@ def create_app(settings: Settings | None = None, *, provider_transport=None) -> 
             store = request.app.state.store
             updated = await store.assign(incident_id, body.team, body.employee, body.expectedEmployee, body.expectedTime,
                                          session.profile.login)
-            return store.snapshot() if includeSnapshot else updated
+            return store.snapshot(session.profile.login) if includeSnapshot else updated
         except AssignmentConflict as exc:
             raise HTTPException(409, str(exc)) from exc
         except (OSError, ValueError) as exc:

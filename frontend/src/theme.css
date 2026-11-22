@@ -38,6 +38,7 @@
       .password-toggle,.filter-trigger,.account-trigger,.theme-trigger,.bell-trigger) { color: var(--ink); }
   .dashboard-actions .account-trigger, .filter-footer button { background: var(--raised); }
   :is(.metric,.incident,.assignment-start):is(:hover,:focus-visible) { border-color: #808b9c; }
+  .incident[data-unread] { border-color: var(--rose); }
   :is(.theme-trigger,.bell-trigger,.sort-picker-option,.filter-trigger,.filter-presets button,
       .result-link,.active-filters button,.sort-picker-trigger,.filter-panel-head button,.password-toggle):is(:hover,:focus-visible) {
     background: var(--raised); color: var(--ink);

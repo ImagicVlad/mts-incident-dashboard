@@ -35,14 +35,17 @@ export function Pill({item,label}:{item:Incident;label?:string}) {
 }
 type PriorityQueue = 'high' | 'critical';
 function Card({item,group,now,animate,priority,onCoordinators}:{item:Incident;group?:GroupId;now:number;animate:boolean;priority?:PriorityQueue;onCoordinators:boolean}) {
-  const {formats:{stamp}} = useLive();
+  const {formats:{stamp},unreadIds} = useLive();
+  const unread = unreadIds?.has(item.id);
   const reduced = useReducedMotion();
   const countdown = active(item) ? remaining(item.deadline,now) : null;
   const coordinatorSince = onCoordinators ? item.lastAssignmentToTeamDateTime : null;
   const restoredAt = finished(item) || item.stateEnum === 'Research' ? item.completionDate : null;
   const hasMetadata = Boolean(item.submitDate || item.assignedGroupName || coordinatorSince);
   return <motion.div initial={animate && !reduced ? {opacity:0,y:6} : false} animate={{opacity:1,y:0}} transition={{duration:reduced?0:0.24}}>
-    <Link data-incident-id={item.id} data-priority={priority} to={pathFor(item.id)} className={group==='history'?'incident resolved':'incident'}>
+    <Link data-incident-id={item.id} data-priority={priority} data-unread={unread || undefined}
+      aria-description={unread ? 'Новый непрочитанный инцидент' : undefined}
+      to={pathFor(item.id)} className={group==='history'?'incident resolved':'incident'}>
       <div className="card-top">
         <div className="card-identity min-w-0">
           <span className="mono">{item.id}</span>

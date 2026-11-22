@@ -44,6 +44,47 @@ def sign_in(client):
     return response
 
 
+def test_unread_incidents_are_personal_and_survive_restart(source, monkeypatch):
+    monkeypatch.setattr("app.store.RUNTIME", source.parent)
+    options = settings(source)
+    second = {"login": "relief", "password": "relief-test-only"}
+    Accounts(options.accounts_path).create(second["login"], "Следующая смена", "coordinator", second["password"])
+    before_handoff = {**ROW, "id": "before-handoff"}
+    incoming = {**ROW, "id": "incoming"}
+    mark = "/api/incidents/incoming/read"
+
+    def unread(client):
+        return set(client.get("/api/incidents").json()["unreadIncidentIds"])
+
+    with TestClient(create_app(options)) as client:
+        assert client.post(mark).status_code == 401
+        sign_in(client)
+        assert unread(client) == set()
+        source.write_text(json.dumps([ROW, before_handoff]), encoding="utf-8")
+        client.portal.call(client.app.state.store.reload)
+        assert unread(client) == {"before-handoff"}
+        assert client.post("/api/auth/login", json=second).status_code == 200
+        assert unread(client) == set()  # This coordinator started one incident later.
+        source.write_text(json.dumps([ROW, before_handoff, incoming]), encoding="utf-8")
+        client.portal.call(client.app.state.store.reload)
+        assert unread(client) == {"incoming"}
+        sign_in(client)
+        assert unread(client) == {"before-handoff", "incoming"}
+        assert client.post(mark).status_code == 204
+        assert client.post(mark).status_code == 204
+        assert unread(client) == {"before-handoff"}
+        source.write_text(json.dumps([ROW, before_handoff]), encoding="utf-8")
+        client.portal.call(client.app.state.store.reload)
+
+    # The source reintroduces the same ID while the application is stopped.
+    source.write_text(json.dumps([ROW, before_handoff, {**incoming, "header": "Updated"}]), encoding="utf-8")
+    with TestClient(create_app(options)) as client:
+        sign_in(client)
+        assert unread(client) == {"before-handoff"}
+        assert client.post("/api/auth/login", json=second).status_code == 200
+        assert unread(client) == {"incoming"}
+
+
 def test_assignment_persists_and_validates_team(source, monkeypatch):
     monkeypatch.setattr("app.store.RUNTIME", source.parent)
     records = [{**ROW, "assignedGroupName": COORDINATORS}, {**ROW, "id": "team",

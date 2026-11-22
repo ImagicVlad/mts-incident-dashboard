@@ -63,6 +63,7 @@ h3 { font-size: 1.16rem; letter-spacing: -.025em; font-weight: 650; }
 .incident-list, .rail { display: grid; gap: 10px; }
 .rail { gap: 16px; }
 .incident { display: grid; grid-template-columns: minmax(0, 1fr); row-gap: 10px; container-type: inline-size; padding: 15px 18px 16px; position: relative; overflow: hidden; }
+.incident[data-unread] { border-color: var(--red); }
 .incident[data-priority="high"] { --priority-stripe: var(--high-accent); --priority-ink: var(--attention); }
 .incident[data-priority="critical"] { --priority-stripe: var(--red); --priority-ink: #c11323; }
 .incident[data-priority]::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--priority-stripe); }

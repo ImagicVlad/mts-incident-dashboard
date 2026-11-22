@@ -31,7 +31,33 @@ class ActivityLog:
                     kind TEXT NOT NULL, label TEXT NOT NULL, time TEXT NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS notified_overdue (incidentId TEXT PRIMARY KEY);
+                CREATE TABLE IF NOT EXISTS reader_baselines (login TEXT PRIMARY KEY, seq INTEGER NOT NULL);
+                CREATE TABLE IF NOT EXISTS incident_reads (
+                    login TEXT NOT NULL, incident TEXT NOT NULL, PRIMARY KEY(login, incident)
+                );
+                CREATE INDEX IF NOT EXISTS first_observations ON activity(seq) WHERE kind='first';
             """)
+
+    def unread(self, login):
+        with closing(sqlite3.connect(self.path)) as db, db:
+            # The first usable snapshot for this coordinator is their starting point.
+            db.execute("""INSERT OR IGNORE INTO reader_baselines(login, seq)
+                          SELECT ?, COALESCE(MAX(seq), 0) FROM activity""", (login,))
+            rows = db.execute("""SELECT a.incident FROM activity a
+                JOIN reader_baselines b ON b.login=? AND a.seq>b.seq
+                WHERE a.kind='first' AND NOT EXISTS (
+                    SELECT 1 FROM incident_reads r WHERE r.login=b.login AND r.incident=a.incident
+                ) ORDER BY a.seq""", (login,))
+            return [row[0] for row in rows]
+
+    def mark_read(self, login, incident):
+        with closing(sqlite3.connect(self.path)) as db, db:
+            # The source may remove the record while its already-open detail page acknowledges it.
+            if not db.execute("SELECT 1 FROM observed WHERE incident=?", (incident,)).fetchone():
+                raise KeyError(incident)
+            result = db.execute("INSERT OR IGNORE INTO incident_reads(login, incident) VALUES(?,?)",
+                                (login, incident))
+            return result.rowcount == 1
 
     def load_feed(self):
         with closing(sqlite3.connect(self.path)) as db:

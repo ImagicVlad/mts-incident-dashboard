@@ -63,8 +63,12 @@ function Assignment({item, incidents}: {item: Incident; incidents: Incident[]}) 
 export function Details() {
   const {id} = useParams();
   const {user} = useOutletContext<ConsoleOutlet>();
-  const {snapshot,now,bootstrapError,formats:{stamp,time,dateFormat,zoneLabel}} = useLive();
+  const {snapshot,now,bootstrapError,unreadIds,markIncidentRead,formats:{stamp,time,dateFormat,zoneLabel}} = useLive();
   const item = snapshot?.incidents.find(i=>i.id===id);
+  const unreadId = item && unreadIds?.has(item.id) ? item.id : undefined;
+  useEffect(()=>{
+    if (unreadId) markIncidentRead(unreadId);
+  },[unreadId,markIncidentRead]);
   useEffect(()=>{document.title = (item?.header || 'Инцидент')+' · Пульт координатора';},[item?.header]);
   useEffect(()=>{window.scrollTo(0,0);},[id]);
   if (!item) return <main className="container waiting"><h1>{snapshot?.hasSnapshot ? 'Инцидент не найден' : bootstrapError || snapshot?.sourceStatus==='error' ? 'Данные недоступны' : 'Загружаем инцидент…'}</h1>

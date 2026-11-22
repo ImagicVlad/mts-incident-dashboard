@@ -97,6 +97,8 @@ class Snapshot(BaseModel):
     groups: dict[str, list[str]]
     counts: dict[str, int]
     notifications: list[Notification]
+    unreadIncidentIds: list[str] = Field(default_factory=list)
+    readVersion: int = 0
     diagnostics: list[str] = Field(default_factory=list)
 
 

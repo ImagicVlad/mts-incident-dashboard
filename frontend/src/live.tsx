@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError, displayFormats, type Account, type GroupId, type Notice, type Snapshot } from './api';
 
@@ -8,6 +8,7 @@ interface Live {
   applyAssignment: (snapshot: Snapshot) => void;
   toasts: Notice[]; dismiss: (id: string) => void; newCards: Set<string>;
   groupArrivals: Partial<Record<GroupId, string>>;
+  unreadIds: ReadonlySet<string>; markIncidentRead: (id: string) => void;
   formats: ReturnType<typeof displayFormats>; aiConfigured?: boolean;
 }
 const Context = createContext<Live | null>(null);
@@ -16,9 +17,9 @@ export function useLive() {
   if (!value) throw Error('Missing live data provider');
   return value;
 }
-export function LiveProvider({children}: {children: ReactNode}) {
+export function LiveProvider({children,login}: {children: ReactNode;login:string}) {
   const client = useQueryClient();
-  const {data: snapshot} = useQuery<Snapshot>({queryKey:['live'], enabled:false});
+  const {data: snapshot} = useQuery<Snapshot>({queryKey:['live',login], enabled:false});
   const {data:settings} = useQuery({queryKey:['health'],queryFn:()=>api<{displayTimezone:string;aiConfigured:boolean}>('health'),staleTime:60_000});
   const formats = useMemo(()=>displayFormats(settings?.displayTimezone),[settings?.displayTimezone]);
   const [link,setLink] = useState<LinkState>('connecting');
@@ -29,6 +30,11 @@ export function LiveProvider({children}: {children: ReactNode}) {
   const clock = useRef({server:Date.now(), sample:performance.now()});
   const [now,setNow] = useState(Date.now);
   const assignmentUpdate = useRef<(snapshot: Snapshot) => void>(()=>{});
+  const readUpdate = useRef<(id:string) => void>(()=>{});
+  const markIncidentRead = useCallback((id:string) => readUpdate.current(id), []);
+  const [opened,setOpened] = useState<Set<string>>(new Set());
+  const unreadIds = useMemo(() => new Set(snapshot?.unreadIncidentIds?.filter(id => !opened.has(id))),
+    [snapshot?.unreadIncidentIds,opened]);
 
   useEffect(() => {
     let closed = false, receivedStream = false, baseline = true;
@@ -42,6 +48,7 @@ export function LiveProvider({children}: {children: ReactNode}) {
       if (closed || (source==='initial' && receivedStream)) return;
       if (source==='assignment' && previous && previous.epoch!==data.epoch) return;
       if (previous?.epoch === data.epoch && data.snapshotVersion < previous.snapshotVersion) return;
+      if (previous?.epoch === data.epoch && (data.readVersion ?? 0) < (previous.readVersion ?? 0)) return;
       const sameRun = previous?.epoch === data.epoch;
       if (source!=='initial' && previous && sameRun && !baseline) {
         const oldIds = new Set(previous.notifications.map(n => n.eventId));
@@ -73,9 +80,27 @@ export function LiveProvider({children}: {children: ReactNode}) {
       setNow(clock.current.server);
       setBootstrapError(false);
       previous = data;
-      client.setQueryData(['live'], data);
+      client.setQueryData(['live',login], data);
     };
     const controller = new AbortController();
+    const pendingReads = new Set<string>();
+    readUpdate.current = id => {
+      if (closed || pendingReads.has(id)) return;
+      pendingReads.add(id);
+      setOpened(old => new Set(old).add(id));
+      const send = async (delay: number) => {
+        if (closed) return;
+        try {
+          await api('incidents/'+encodeURIComponent(id)+'/read', {}, undefined, {keepalive:true});
+          pendingReads.delete(id);
+        } catch (error) {
+          if (!closed && (!(error instanceof ApiError) || error.status >= 500)) {
+            after(delay, () => void send(Math.min(delay * 2, 30_000)));
+          }
+        }
+      };
+      void send(1000);
+    };
     assignmentUpdate.current = data => accept(data, 'assignment');
     api<Snapshot>('incidents', undefined, controller.signal).then(data => accept(data, 'initial')).catch(() => {
       if (!closed && !receivedStream) setBootstrapError(true);
@@ -93,7 +118,7 @@ export function LiveProvider({children}: {children: ReactNode}) {
     return () => {
       closed = true; stream.close(); controller.abort(); clearInterval(ticker); timers.forEach(clearTimeout);
     };
-  }, [client]);
-  return <Context.Provider value={{snapshot,link,now,bootstrapError,toasts,newCards,groupArrivals,formats,applyAssignment:data=>assignmentUpdate.current(data),aiConfigured:settings?.aiConfigured,
+  }, [client,login]);
+  return <Context.Provider value={{snapshot,link,now,bootstrapError,toasts,newCards,groupArrivals,unreadIds,markIncidentRead,formats,applyAssignment:data=>assignmentUpdate.current(data),aiConfigured:settings?.aiConfigured,
     dismiss:id => setToasts(old => old.filter(n => n.eventId !== id))}}>{children}</Context.Provider>;
 }

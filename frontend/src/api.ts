@@ -19,6 +19,7 @@ export interface Snapshot {
   hasSnapshot: boolean; demoMode: boolean; incidents: Incident[];
   deadlineOrder: string[];
   groups: Record<GroupId, string[]>; counts: Record<GroupId, number>;
+  unreadIncidentIds?: string[]; readVersion?: number;
   notifications: Notice[]; diagnostics: string[];
 }
 export interface Account { login: string; displayName: string; role: 'coordinator' }
@@ -36,8 +37,9 @@ export const sessionChangeKey = 'mts.auth.sessionChange';
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
-export async function api<T>(url: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+export async function api<T>(url: string, body?: unknown, signal?: AbortSignal, options?: Pick<RequestInit,'keepalive'>): Promise<T> {
   const response = await fetch('/api/' + url, {
+    ...options,
     method: body === undefined ? 'GET' : 'POST', credentials: 'same-origin', signal,
     headers: body === undefined ? {} : {'Content-Type': 'application/json'},
     body: body === undefined ? undefined : JSON.stringify(body),

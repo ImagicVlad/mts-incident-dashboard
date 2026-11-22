@@ -91,6 +91,56 @@ test('передача активного инцидента обновляет 
   } finally { await replace(original); }
 });
 
+test('контур нового инцидента сохраняется до открытия ITSM и снимается во всех его очередях', async ({page, context}) => {
+  const original = await readFile(file, 'utf8');
+  const [existing] = JSON.parse(original);
+  const issue = {id:'UNREAD-NEW', header:'Не проходят звонки', stateEnum:'Assigned', priorityId:4,
+    assignedGroupName:'КЦ ИТ Координаторы Массовых Инцидентов'};
+  const other = {id:'UNREAD-OTHER', header:'Задержка выгрузки', stateEnum:'Assigned', priorityId:3};
+  const copies = page.locator('[data-incident-id="UNREAD-NEW"]');
+  const unreadCopies = page.locator('[data-incident-id="UNREAD-NEW"][data-unread="true"]');
+  const otherCard = page.locator('[data-incident-id="UNREAD-OTHER"]');
+  try {
+    await replace(JSON.stringify([existing]));
+    await page.goto('/login');
+    await Promise.all([
+      page.waitForResponse(response => response.url().endsWith('/api/incidents/events')),
+      signIn(page),
+    ]);
+    const existingCard = page.getByTestId('group-critical').locator(`[data-incident-id="${existing.id}"]`);
+    await expect(existingCard).toBeVisible();
+    await expect(existingCard).not.toHaveAttribute('data-unread', 'true');
+
+    const publish = () => replace(JSON.stringify([existing, issue, other]));
+    await publish();
+    await expect(unreadCopies).toHaveCount(2);
+    await page.reload();
+    await expect(unreadCopies).toHaveCount(2);
+    await expect(otherCard).toHaveAttribute('data-unread', 'true');
+    await expect(otherCard).toHaveCSS('border-width','1px');
+    await expect(otherCard).toHaveCSS('border-color','rgb(229, 27, 44)');
+    await page.getByRole('button',{name:'Тёмная тема'}).click();
+    await otherCard.hover();
+    await expect(otherCard).toHaveCSS('border-color','rgb(255, 140, 156)');
+
+    const detail = await context.newPage();
+    await detail.goto('/incidents/' + issue.id);
+    await expect(detail.getByRole('heading', {level:1, name:issue.header})).toBeVisible();
+    await expect(unreadCopies).toHaveCount(0);
+    await expect(copies).toHaveCount(2);
+    await expect(otherCard).toHaveAttribute('data-unread', 'true');
+    await detail.close();
+
+    issue.stateEnum = 'Research';
+    await publish();
+    await page.reload();
+    const moved = page.getByTestId('group-review').locator('[data-incident-id="UNREAD-NEW"]');
+    await expect(moved).toBeVisible();
+    await expect(unreadCopies).toHaveCount(0);
+    await expect(otherCard).toHaveAttribute('data-unread', 'true');
+  } finally { await replace(original); }
+});
+
 test('плашки подсвечиваются только при поступлении инцидента в их группу', async ({page}) => {
   const original = await readFile(file, 'utf8');
   const issue = {id:'GLOW-1', header:'Первый инцидент', priorityId:4, stateEnum:'Assigned',

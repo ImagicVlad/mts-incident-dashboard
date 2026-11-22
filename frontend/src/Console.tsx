@@ -12,7 +12,7 @@ export type ConsoleOutlet = {user: Account; setChatDock: (dock: HTMLDivElement |
 
 export default function Console({user}:{user:Account}) {
   const [chatDock, setChatDock] = useState<HTMLDivElement | null>(null);
-  return <MotionConfig reducedMotion="user"><LiveProvider>
+  return <MotionConfig reducedMotion="user"><LiveProvider key={user.login} login={user.login}>
     <ViewProvider key={user.login} login={user.login}><Header user={user}/><LiveStatus/>
     <Suspense fallback={<main className="container waiting" role="status">Загружаем пульт…</main>}>
       <Outlet context={{user,setChatDock} satisfies ConsoleOutlet}/>
