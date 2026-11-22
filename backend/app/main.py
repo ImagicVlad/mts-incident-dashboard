@@ -17,7 +17,7 @@ from .config import Settings
 from .demo_data import prepare_default_demo
 from .domain import Incident, Snapshot
 from .security import COOKIE, Sessions, check_origin
-from .store import Store
+from .store import AssignmentConflict, Store
 
 
 class Login(BaseModel):
@@ -29,6 +29,13 @@ class Login(BaseModel):
 class Profile(BaseModel):
     login: str
     displayName: str
+
+
+class Assignment(BaseModel):
+    team: str = Field(min_length=1)
+    employee: str | None
+    expectedEmployee: str | None
+    expectedTime: str | None
 
 
 class Health(BaseModel):
@@ -141,6 +148,15 @@ def create_app(settings: Settings | None = None, *, provider_transport=None) -> 
     @app.get("/api/incidents/{incident_id}", response_model=Incident, tags=["incidents"])
     async def incident(incident_id: str, request: Request, token: CurrentSession):
         return incident_by_id(request.app.state.store.snapshot(), incident_id)
+
+    @app.post("/api/incidents/{incident_id}/assignment", response_model=Incident, tags=["incidents"])
+    async def assign(incident_id: str, body: Assignment, request: Request, token: CurrentSession):
+        try:
+            return await request.app.state.store.assign(incident_id, body.team, body.employee, body.expectedEmployee, body.expectedTime)
+        except AssignmentConflict as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except (OSError, ValueError) as exc:
+            raise HTTPException(503, "Не удалось сохранить назначение. Попробуйте ещё раз.") from exc
 
     @app.post("/api/ai/summary", response_model=SummaryAnswer, tags=["ai"])
     async def summary(body: SummaryInput, request: Request, token: CurrentSession):

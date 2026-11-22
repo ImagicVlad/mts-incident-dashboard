@@ -26,6 +26,13 @@ nav a svg, .focus-bottom a svg, .button svg { vertical-align: middle; }
 .waiting h1 { font-size: clamp(2rem,4vw,3.5rem); }
 .waiting p, .waiting .button { margin-top: 18px; }
 .queue-empty { margin: 0; }
+.assignment-link { display: block; padding: 0; margin-top: .35rem; color: #a71932; font: inherit; font-size: .86rem; border: 0; background: transparent; cursor: pointer; text-decoration: underline; text-underline-offset: .18em; }
+.assignment-form fieldset { display: grid; gap: .7rem; min-width: 0; margin: .7rem 0 0; padding: 0; border: 0; }
+.assignment-form label { display: grid; gap: .25rem; color: var(--muted); font-size: .82rem; }
+.assignment-form select { min-width: 0; width: 100%; border: 1px solid #ccd1d7; border-radius: 8px; padding: .55rem; background: white; color: #20242c; font: inherit; font-size: .95rem; }
+.assignment-form fieldset > div { display: flex; align-items: baseline; flex-wrap: wrap; gap: 1rem; }
+.assignment-form button:disabled { opacity: .5; }
+.assignment-form [role="alert"] { color: #a71932; }
 .source-details { margin: 0 0 40px; color: var(--muted); font-size: .86rem; }
 summary { cursor: pointer; }
 .paper-heading { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; }

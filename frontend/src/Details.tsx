@@ -1,7 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ChevronLeft, ExternalLink } from 'lucide-react';
-import { active, finished, remaining } from './api';
+import { active, api, errorText, finished, remaining, type Incident } from './api';
 import { Pill } from './Dashboard';
 import { Summary } from './Intelligence';
 import { useLive } from './live';
@@ -14,6 +14,37 @@ function observeDataHeight(paper: HTMLElement | null) {
   });
   observer.observe(paper, {box: 'border-box'});
   return () => observer.disconnect();
+}
+
+function Assignment({item, incidents}: {item: Incident; incidents: Incident[]}) {
+  const [open, setOpen] = useState(false);
+  const [team, setTeam] = useState(item.assignedGroupName || '');
+  const [employee, setEmployee] = useState(item.assignedEmployee || '');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState('');
+  if (!open) return <button className="assignment-link" onClick={()=>setOpen(true)}>Изменить назначение</button>;
+  const teams = [...new Set(incidents.map(i=>i.assignedGroupName).filter(Boolean))].sort((a,b)=>a!.localeCompare(b!, 'ru'));
+  const members = [...new Set(incidents.filter(i=>i.assignedGroupName===team).map(i=>i.assignedEmployee).filter(Boolean))].sort((a,b)=>a!.localeCompare(b!, 'ru'));
+  return <form className="assignment-form" onSubmit={async event=>{
+    event.preventDefault();
+    setPending(true); setError('');
+    try {
+      await api('incidents/'+encodeURIComponent(item.id)+'/assignment', {team, employee:employee || null,
+        expectedEmployee:item.assignedEmployee, expectedTime:item.lastAssignmentToTeamDateTime});
+      setOpen(false);
+    } catch (err) {setError(errorText(err));}
+    finally {setPending(false);}
+  }}>
+    <fieldset disabled={pending}>
+      <label>Команда<select aria-label="Команда" value={team} onChange={e=>{setTeam(e.target.value); setEmployee('');}}>
+        {teams.map(t=><option key={t} value={t!}>{t}</option>)}</select></label>
+      <label>Исполнитель<select aria-label="Исполнитель" value={employee} onChange={e=>setEmployee(e.target.value)}>
+        <option value="">Без исполнителя</option>{members.map(m=><option key={m} value={m!}>{m}</option>)}</select></label>
+      {error && <p role="alert">{error}</p>}
+      <div><button className="button primary" disabled={team===item.assignedGroupName && employee===(item.assignedEmployee || '')}>{pending?'Сохраняем…':'Сохранить'}</button>
+        <button type="button" className="assignment-link" onClick={()=>{setOpen(false); setTeam(item.assignedGroupName || ''); setEmployee(item.assignedEmployee || ''); setError('');}}>Отмена</button></div>
+    </fieldset>
+  </form>;
 }
 
 export function Details() {
@@ -40,7 +71,10 @@ export function Details() {
     <article className="record default-record"><h1>{item.header || 'Без заголовка'}</h1>
     <div className="record-grid"><section className="paper" ref={observeDataHeight}>
       <header className="paper-heading"><h2>Данные инцидента</h2><div className="record-label"><span className="mono">{item.id}</span><Pill item={item}/></div></header>
-      <dl className="facts">{rows.map(([name,value])=><div key={name}><dt>{name}</dt><dd>{value || 'Не указан'}</dd></div>)}</dl>
+      <dl className="facts">{rows.map(([name,value])=><div key={name}><dt>{name}</dt><dd>{value || 'Не указан'}
+        {name==='Команда назначения' && snapshot?.groups.assigned.includes(item.id) &&
+          <Assignment key={JSON.stringify([item.id,item.assignedEmployee,item.lastAssignmentToTeamDateTime])} item={item} incidents={snapshot.incidents}/>}
+      </dd></div>)}</dl>
       <section className="record-text"><h3>Описание</h3><p>{description || 'Описание отсутствует.'}</p></section>
       {item.solution && <section className="record-text"><h3>Решение из источника</h3><p>{item.solution}</p></section>}
       {item.diagnostics?.length>0 && <details className="record-text"><summary>Замечания к записи</summary><ul>{item.diagnostics.map((d,k)=><li key={k}>{d}</li>)}</ul></details>}

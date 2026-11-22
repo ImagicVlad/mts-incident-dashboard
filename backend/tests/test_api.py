@@ -40,6 +40,26 @@ def sign_in(client):
     return response
 
 
+def test_assignment_persists_and_validates_team(source, monkeypatch):
+    monkeypatch.setattr("app.store.RUNTIME", source.parent)
+    records = [{**ROW, "assignedGroupName": COORDINATORS}, {**ROW, "id": "team",
+                "assignedGroupName": "Support", "assignedEmployee": "Operator"}]
+    source.write_text(json.dumps(records), encoding="utf-8")
+    url = "/api/incidents/demo-001/assignment"
+    body = dict(team="Support", employee="Operator", expectedEmployee=None, expectedTime=None)
+    with TestClient(create_app(settings(source))) as client:
+        assert client.post(url, json=body).status_code == 401
+        sign_in(client)
+        assert client.post(url, json={**body, "employee":"Wrong"}).status_code == 409
+        assert client.post(url, json=body).json()["assignedEmployee"] == "Operator"
+        assert client.post(url, json=body).status_code == 409
+    with TestClient(create_app(settings(source))) as client:
+        sign_in(client)
+        assert client.get("/api/incidents/demo-001").json()["assignedGroupName"] == "Support"
+        assert not client.get("/api/incidents").json()["groups"]["assigned"]
+    assert json.loads(source.read_text(encoding="utf-8")) == records
+
+
 def test_chat_and_dashboard_use_the_same_active_deadlines(tmp_path, monkeypatch):
     now = datetime(2030, 1, 2, 12, tzinfo=UTC)
     monkeypatch.setattr("app.store.utc_now", lambda: now)

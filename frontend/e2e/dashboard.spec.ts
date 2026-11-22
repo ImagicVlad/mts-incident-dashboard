@@ -383,9 +383,15 @@ test('команда координаторов и стадия исследов
     await expect(critical).toHaveCount(0);
     await expect(history).toHaveCount(0);
 
-    issue.assignedGroupName = 'Платёжные сервисы';
-    await publish();
-    await expect(research).toContainText(issue.assignedGroupName);
+    await replace(JSON.stringify([issue, {id:'TEAM-EXAMPLE', stateEnum:'Closed',
+      assignedGroupName:'Платёжные сервисы', assignedEmployee:'Дежурный инженер'}]));
+    await detail.getByRole('button', {name:'Изменить назначение'}).click();
+    await detail.getByLabel('Команда', {exact:true}).selectOption('Платёжные сервисы');
+    await detail.getByLabel('Исполнитель', {exact:true}).selectOption('Дежурный инженер');
+    await detail.getByRole('button', {name:'Сохранить', exact:true}).click();
+    await expect(research).toContainText('Платёжные сервисы');
+    await detail.reload();
+    await expect(detail.locator('.facts dd').filter({hasText:'Дежурный инженер'})).toBeVisible();
     await expect(handoff).toHaveCount(0);
     await expect(research).not.toContainText(reviewAction);
     await expect(assigned).toHaveCount(0);

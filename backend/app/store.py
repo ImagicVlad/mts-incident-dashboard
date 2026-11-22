@@ -3,6 +3,7 @@
 import asyncio
 import json
 import os
+from hashlib import sha256
 from collections import deque
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
@@ -11,7 +12,8 @@ from uuid import uuid4
 
 from watchfiles import awatch
 
-from .domain import OPEN, Incident, classify, critical_from, deadline_order, normalize_records, transitions, utc_string
+from .demo_data import RUNTIME, atomic_write
+from .domain import OPEN, Incident, classify, critical_from, deadline_order, memberships, normalize_records, transitions, utc_string
 
 
 def utc_now() -> datetime:
@@ -22,9 +24,15 @@ def signature(stat: os.stat_result) -> tuple[int, int, int, int]:
     return stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns
 
 
+class AssignmentConflict(ValueError):
+    pass
+
+
 class Store:
     def __init__(self, path: Path, demo: bool, polling: bool = False, itsm_url_template: str = ""):
         self.path = Path(path).resolve()
+        source_key = sha256(os.fsencode(self.path)).hexdigest()
+        self.assignments_file = RUNTIME / f"assignments-{source_key}.json"
         self.demo = demo
         self.polling = polling
         self.template = itsm_url_template
@@ -88,7 +96,45 @@ class Store:
         with self.path.open("r", encoding="utf-8-sig") as source:
             stamp = signature(os.fstat(source.fileno()))
             rows = json.load(source)
-        return normalize_records(rows, self.template), stamp
+        items = normalize_records(rows, self.template)
+        try:
+            saved = json.loads(self.assignments_file.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            saved = {}
+        saved_count = len(saved)
+        for id_, entry in list(saved.items()):
+            row = items.get(id_)
+            if row is None or "assigned" not in memberships(row) or self._assignment_key(row) != entry["source"]:
+                del saved[id_]
+            else:
+                items[id_] = row.model_copy(update=entry["changes"])
+        if len(saved) != saved_count:
+            atomic_write(self.assignments_file, json.dumps(saved, ensure_ascii=False))
+        return items, stamp, saved
+
+    @staticmethod
+    def _assignment_key(row):
+        return [row.sysId, row.submitDate, row.assignedGroupName, row.assignedEmployee, row.lastAssignmentToTeamDateTime]
+
+    async def assign(self, id_, team, employee, expected_employee, expected_time):
+        async with self._lock:
+            items, stamp, saved = await asyncio.to_thread(self._read)
+            item = items.get(id_)
+            if not item or "assigned" not in memberships(item) or (item.assignedEmployee, item.lastAssignmentToTeamDateTime) != (expected_employee, expected_time):
+                raise AssignmentConflict("Назначение уже изменилось. Проверьте карточку.")
+            if not any(row.assignedGroupName == team and (employee is None or row.assignedEmployee == employee)
+                       for row in items.values()):
+                raise AssignmentConflict("Проверьте команду и исполнителя.")
+            if team == item.assignedGroupName and employee == item.assignedEmployee:
+                return item
+            changes = dict(assignedGroupName=team, assignedEmployee=employee,
+                           lastAssignmentToTeamDateTime=utc_string(utc_now()) if team != item.assignedGroupName else expected_time)
+            saved[id_] = {"source": saved.get(id_, {}).get("source", self._assignment_key(item)), "changes": changes}
+            await asyncio.to_thread(atomic_write, self.assignments_file, json.dumps(saved, ensure_ascii=False))
+            items[id_] = item.model_copy(update=changes)
+            self._signature = stamp
+            self._accept(items)
+            return items[id_]
 
     async def reload(self) -> None:
         async with self._lock:
@@ -96,7 +142,7 @@ class Store:
                 if delay:
                     await asyncio.sleep(delay)
                 try:
-                    items, stamp = await asyncio.to_thread(self._read)
+                    items, stamp, _ = await asyncio.to_thread(self._read)
                 except FileNotFoundError:
                     error = "Файл инцидентов не найден."
                 except (json.JSONDecodeError, UnicodeError, RecursionError):
