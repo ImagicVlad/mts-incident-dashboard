@@ -90,16 +90,18 @@ summary { cursor: pointer; }
 .paper-heading .record-label { margin: 0; flex-wrap: wrap; }
 .team-since { font-size: .81rem; color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
 .facts dd:has(.team-since) { display: flex; align-items: baseline; flex-wrap: wrap; gap: .2em .65em; }
-.incident-dates { margin-block: 24px 0; padding: 14px 16px; border-radius: 10px; background: color-mix(in srgb, var(--muted) 6%, transparent); }
-.incident-dates header, .incident-dates dl > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.incident-dates header { margin-bottom: 9px; }
-.incident-dates h3 { font-size: .94rem; }
-.incident-dates header > span { color: var(--muted); font-size: .73rem; }
-.incident-dates dl { display: grid; gap: 8px; margin: 0; font-size: .88rem; line-height: 1.35; }
-.incident-dates dt, .incident-dates time span { color: var(--muted); }
-.incident-dates dd { margin: 0; text-align: end; font-variant-numeric: tabular-nums; }
-.incident-dates time { display: inline-flex; gap: .7em; align-items: baseline; }
+.incident-dates { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line); }
+.incident-dates header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.incident-dates header > span { color: var(--muted); font-size: .85rem; }
+.incident-dates dl { display: grid; gap: 10px; margin: 12px 0 0; line-height: 1.5; }
+.incident-dates dl > div { display: grid; grid-template-columns: 38% 1fr; gap: 16px; }
+.incident-dates dt { color: var(--muted); }
+.incident-dates dd { margin: 0; font-variant-numeric: tabular-nums; }
+.incident-dates time { display: inline-flex; flex-wrap: wrap; gap: 0 .65em; align-items: baseline; }
 .incident-dates time b { font-weight: 600; }
+@media (max-width: 520px) {
+  .incident-dates dl > div { grid-template-columns: minmax(0,1fr) auto; gap: 8px; }
+}
 .record-text { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 16px; }
 .record-text p, .answer-text, .chat-message p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
 .record-text p { margin-top: 8px; }
