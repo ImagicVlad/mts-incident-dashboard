@@ -10,6 +10,21 @@
   .category-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
   .dashboard-bar, .overview { --attention: #ac4a00; --attention-tint: #fff0df; }
   .overview { --high-accent: #cd630f; }
+  .metric { position: relative; }
+  .metric-arrival { display: none; }
+  @media (prefers-reduced-motion: no-preference) {
+    .metric-arrival {
+      display: block; position: absolute; inset: -1px; border-radius: inherit; pointer-events: none;
+      border: 1px solid color-mix(in srgb, var(--accent) 65%, transparent);
+      background: color-mix(in srgb, var(--accent) 9%, transparent);
+      box-shadow: 0 0 16px 2px color-mix(in srgb, var(--accent) 24%, transparent);
+      opacity: 0; animation: metric-arrival 1.2s ease-in-out;
+    }
+    @keyframes metric-arrival {
+      0%, 100% { opacity: 0; }
+      22% { opacity: 1; }
+    }
+  }
   .dashboard-bar { position: sticky; top: 0; z-index: 20; }
   .dashboard-nav { display: grid; grid-template-columns: minmax(140px,1fr) minmax(0,560px) minmax(140px,1fr); align-items: center; }
   .mts-mark { display: inline-flex; align-items: center; gap: 10px; width: fit-content; font-size: 1.35rem; font-weight: 750; letter-spacing: -.045em; line-height: 1; }

@@ -91,6 +91,48 @@ test('передача активного инцидента обновляет 
   } finally { await replace(original); }
 });
 
+test('плашки подсвечиваются только при поступлении инцидента в их группу', async ({page}) => {
+  const original = await readFile(file, 'utf8');
+  const issue = {id:'GLOW-1', header:'Первый инцидент', priorityId:4, stateEnum:'Assigned',
+    assignedGroupName:'КЦ ИТ Координаторы Массовых Инцидентов'};
+  try {
+    await replace(JSON.stringify([issue]));
+    await page.emulateMedia({reducedMotion:'no-preference'});
+    await page.goto('/login');
+    await Promise.all([
+      page.waitForResponse(response => response.url().endsWith('/api/incidents/events')),
+      signIn(page),
+    ]);
+    const tiles = page.getByRole('navigation', {name:'Группы инцидентов'});
+    const critical = tiles.locator('[href="#critical"]');
+    const assigned = tiles.locator('[href="#assigned"]');
+    await expect(critical.locator('.count')).toHaveText('1');
+    await expect(tiles.locator('.metric-arrival')).toHaveCount(0);
+    await tiles.evaluate(nav => nav.addEventListener('animationstart', event => {
+      if (event.animationName !== 'metric-arrival') return;
+      const tile = (event.target as Element).closest('a')!;
+      tile.dataset.pulses = String(Number(tile.dataset.pulses ?? 0) + 1);
+    }));
+
+    // The count stays at one when an outgoing incident is replaced in the same snapshot.
+    for (const [index, id] of ['GLOW-2','GLOW-3'].entries()) {
+      await replace(JSON.stringify([{...issue, id}]));
+      for (const tile of [critical, assigned]) await expect(tile).toHaveAttribute('data-pulses', String(index + 1));
+    }
+    await expect(tiles.locator('.metric-arrival')).toHaveCount(2);
+    await expect(critical.locator('.metric-arrival')).toHaveCSS('opacity', '0');
+    const edited = {...issue, id:'GLOW-3', header:'Уточнили описание'};
+    await replace(JSON.stringify([edited]));
+    await expect(page.getByTestId('group-critical')).toContainText(edited.header);
+    await expect(critical).toHaveAttribute('data-pulses','2');
+
+    await page.emulateMedia({reducedMotion:'reduce'});
+    await replace(JSON.stringify([{...edited, priorityId:3}]));
+    await expect(tiles.locator('[href="#high"] .count')).toHaveText('1');
+    await expect(tiles.locator('[href="#high"] .metric-arrival')).toBeHidden();
+  } finally { await replace(original); }
+});
+
 test('срочные события всплывают один раз, просмотр ленты снимает точку', async ({page}) => {
   const original = await readFile(file, 'utf8');
   const issue = {id: 'NOTICE-1', stateEnum: 'Assigned', priorityId: 2, assignedGroupName: '', deadline: ''};

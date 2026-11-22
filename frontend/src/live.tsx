@@ -1,12 +1,13 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, ApiError, displayFormats, type Account, type Notice, type Snapshot } from './api';
+import { api, ApiError, displayFormats, type Account, type GroupId, type Notice, type Snapshot } from './api';
 
 type LinkState = 'connecting' | 'online' | 'reconnecting';
 interface Live {
   snapshot?: Snapshot; link: LinkState; now: number; bootstrapError: boolean;
   applyAssignment: (snapshot: Snapshot) => void;
   toasts: Notice[]; dismiss: (id: string) => void; newCards: Set<string>;
+  groupArrivals: Partial<Record<GroupId, string>>;
   formats: ReturnType<typeof displayFormats>; aiConfigured?: boolean;
 }
 const Context = createContext<Live | null>(null);
@@ -24,6 +25,7 @@ export function LiveProvider({children}: {children: ReactNode}) {
   const [bootstrapError,setBootstrapError] = useState(false);
   const [toasts,setToasts] = useState<Notice[]>([]);
   const [newCards,setNewCards] = useState<Set<string>>(new Set());
+  const [groupArrivals,setGroupArrivals] = useState<Live['groupArrivals']>({});
   const clock = useRef({server:Date.now(), sample:performance.now()});
   const [now,setNow] = useState(Date.now);
   const assignmentUpdate = useRef<(snapshot: Snapshot) => void>(()=>{});
@@ -50,16 +52,21 @@ export function LiveProvider({children}: {children: ReactNode}) {
           const ids = new Set(added.map(n => n.eventId));
           after(6500, () => setToasts(old => old.filter(n => !ids.has(n.eventId))));
         }
+        const arrivals: Live['groupArrivals'] = {};
         const addedCards = Object.entries(data.groups).flatMap(([key, ids]) => {
-          const old = new Set(previous!.groups[key as keyof Snapshot['groups']]);
-          return ids.filter(id => !old.has(id)).map(id => key + '/' + id);
+          const group = key as GroupId;
+          const old = new Set(previous!.groups[group]);
+          const incoming = ids.filter(id => !old.has(id));
+          if (incoming.length) arrivals[group] = data.epoch + '/' + data.snapshotVersion;
+          return incoming.map(id => group + '/' + id);
         });
         if (addedCards.length) {
+          if (previous.hasSnapshot) setGroupArrivals(old => ({...old, ...arrivals}));
           setNewCards(old => new Set([...old, ...addedCards]));
           after(350, () => setNewCards(old => {const next = new Set(old); addedCards.forEach(key => next.delete(key)); return next;}));
         }
       } else if (!sameRun) {
-        setToasts([]); setNewCards(new Set());
+        setToasts([]); setNewCards(new Set()); setGroupArrivals({});
       }
       if (source==='stream') { receivedStream = true; baseline = false; setLink('online'); }
       clock.current = {server:Date.parse(data.serverTime), sample:performance.now()};
@@ -87,6 +94,6 @@ export function LiveProvider({children}: {children: ReactNode}) {
       closed = true; stream.close(); controller.abort(); clearInterval(ticker); timers.forEach(clearTimeout);
     };
   }, [client]);
-  return <Context.Provider value={{snapshot,link,now,bootstrapError,toasts,newCards,formats,applyAssignment:data=>assignmentUpdate.current(data),aiConfigured:settings?.aiConfigured,
+  return <Context.Provider value={{snapshot,link,now,bootstrapError,toasts,newCards,groupArrivals,formats,applyAssignment:data=>assignmentUpdate.current(data),aiConfigured:settings?.aiConfigured,
     dismiss:id => setToasts(old => old.filter(n => n.eventId !== id))}}>{children}</Context.Provider>;
 }

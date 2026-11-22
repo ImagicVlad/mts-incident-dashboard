@@ -66,9 +66,16 @@ function Card({item,group,now,animate,priority,onCoordinators}:{item:Incident;gr
     </Link>
   </motion.div>;
 }
+function GroupGlow({arrival}: {arrival?: string}) {
+  // Mounting a tile after navigation or filtering starts from the current snapshot.
+  const [initialArrival] = useState(arrival);
+  if (!arrival || arrival === initialArrival) return null;
+  return <span key={arrival} className="metric-arrival" aria-hidden="true"/>;
+}
+
 export function Dashboard() {
   const {setChatDock} = useOutletContext<ConsoleOutlet>();
-  const {snapshot,now,newCards,bootstrapError} = useLive();
+  const {snapshot,now,newCards,groupArrivals,bootstrapError} = useLive();
   const {settings,query,result,index,clearFilters,patch,reset}=useViews();
   const deadlineHeading = useRef<HTMLHeadingElement>(null);
   const [expanded,setExpanded] = useState<Partial<Record<GroupId,boolean>>>({});
@@ -117,6 +124,7 @@ export function Dashboard() {
     <div className="page-intro"><h1>Дашборд инцидентов</h1></div>
     {!settings.deadlineList && <ActiveFilters/>}
     {!filtered && <nav className="metrics" aria-label="Группы инцидентов">{sections.map(g=><a className={'metric '+g.tone} key={g.id} href={'#'+g.id} onClick={()=>setExpanded(p=>({...p,[g.id]:true}))}>
+      <GroupGlow arrival={groupArrivals[g.id]}/>
       <span className="metric-heading"><svg width="20" height="20" aria-hidden="true" focusable="false"><use href={'/queue-icons.svg#'+g.icon}/></svg>
         <span className="category-caption"><strong className="metric-name">{g.name}</strong>{counter(g.id)}</span>
       </span><small>{g.note}</small></a>)}</nav>}
