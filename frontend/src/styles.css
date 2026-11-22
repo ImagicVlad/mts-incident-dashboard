@@ -90,7 +90,7 @@ summary { cursor: pointer; }
 .paper-heading .record-label { margin: 0; flex-wrap: wrap; }
 .team-since { font-size: .81rem; color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
 .facts dd:has(.team-since) { display: flex; align-items: baseline; flex-wrap: wrap; gap: .2em .65em; }
-.incident-dates { margin-block: 6px 18px; padding: 14px 16px; border-radius: 10px; background: color-mix(in srgb, var(--muted) 6%, transparent); }
+.incident-dates { margin-block: 24px 0; padding: 14px 16px; border-radius: 10px; background: color-mix(in srgb, var(--muted) 6%, transparent); }
 .incident-dates header, .incident-dates dl > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .incident-dates header { margin-bottom: 9px; }
 .incident-dates h3 { font-size: .94rem; }
