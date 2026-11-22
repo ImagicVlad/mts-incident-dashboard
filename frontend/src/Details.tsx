@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useOutletContext, useParams } from 'react-router-dom';
-import { ChevronLeft, ExternalLink } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ExternalLink } from 'lucide-react';
 import { IncidentActivity } from './IncidentActivity';
 import { FilterPicker } from './filters/FilterTools';
 import { active, api, errorText, finished, remaining, type Incident, type Snapshot } from './api';
@@ -63,7 +63,7 @@ function Assignment({item, incidents}: {item: Incident; incidents: Incident[]}) 
 export function Details() {
   const {id} = useParams();
   const {user} = useOutletContext<ConsoleOutlet>();
-  const {snapshot,now,bootstrapError,formats:{stamp,time,zoneLabel}} = useLive();
+  const {snapshot,now,bootstrapError,formats:{stamp,time,dateFormat,zoneLabel}} = useLive();
   const item = snapshot?.incidents.find(i=>i.id===id);
   useEffect(()=>{document.title = (item?.header || 'Инцидент')+' · Пульт координатора';},[item?.header]);
   useEffect(()=>{window.scrollTo(0,0);},[id]);
@@ -77,19 +77,34 @@ export function Details() {
     ['Продукт',item.productName],['Сервис',item.service],['Приоритет',item.priority],
     [onCoordinators ? 'Профильная команда' : 'Команда назначения',onCoordinators ? 'Ещё не назначена' : item.assignedGroupName],
     [onCoordinators ? 'Координатор' : 'Исполнитель',item.assignedEmployee],
-    ...(!onCoordinators && (active(item) || research) && item.assignedGroupName && item.lastAssignmentToTeamDateTime
-      ? [['Время назначения команде',stamp(item.lastAssignmentToTeamDateTime)]] : []),
     ...(onCoordinators ? [['Следующий шаг', research
       ? 'Передать разбор причин профильной команде' : 'Передать инцидент профильной команде']] : []),
-    ['Время возникновения',stamp(item.submitDate)], ['Плановый срок устранения',stamp(item.deadline)],
-    ...(item.completionDate?[['Завершение по данным источника',stamp(item.completionDate)]]:[]),
   ];
+  const showAssignment = !onCoordinators && (active(item) || research) && item.assignedGroupName;
+  const dates = [
+    {label:'Начало', value:item.submitDate},
+    {label:'У команды с', value:showAssignment ? item.lastAssignmentToTeamDateTime : null},
+    {label:'Срок решения', value:item.deadline},
+    {label:'Завершение', value:item.completionDate},
+  ].flatMap(({label,value}) => value ? [{label,value,day:dateFormat.format(new Date(value))}] : []);
+  const sharedDay = dates.length && dates.every(entry => entry.day === dates[0].day) ? dates[0].day : null;
   const description = item.description || item.shortDescription;
   return <main className="container record-page"><nav className="crumb" aria-label="Путь"><Link to="/dashboard"><ChevronLeft size={15}/> Дашборд</Link><span>/</span>{item.id}</nav>
     <article className="record default-record"><h1>{item.header || 'Без заголовка'}</h1>
     <div className="record-grid"><section className="paper" ref={observeDataHeight}>
       <header className="paper-heading"><h2>Данные инцидента</h2><div className="record-label"><span className="mono">{item.id}</span><Pill item={item} label={active(item) ? overviewStatus(item,Boolean(onCoordinators)) : undefined}/></div></header>
       <dl className="facts">{rows.map(([name,value])=><div key={name}><dt>{name}</dt><dd>{value || 'Не указан'}</dd></div>)}</dl>
+      {dates.length > 0 && <section className="incident-dates" aria-label="Даты инцидента">
+        <div className="incident-dates-heading"><CalendarDays size={15} aria-hidden="true"/>
+          <span>{sharedDay || 'Даты инцидента'}</span><span className="dates-zone">{zoneLabel}</span>
+        </div>
+        <dl>{dates.map(({label,value,day})=><div key={label}>
+          <dt>{label}</dt>
+          <dd><time dateTime={value} title={stamp(value)+' '+zoneLabel}>
+            {time(value)}{!sharedDay && <small>{day}</small>}
+          </time></dd>
+        </div>)}</dl>
+      </section>}
       <section className="record-text"><h3>Описание</h3><p>{description || 'Описание отсутствует.'}</p></section>
       {item.solution && <section className="record-text"><h3>Решение из источника</h3><p>{item.solution}</p></section>}
       {item.diagnostics?.length>0 && <details className="record-text"><summary>Замечания к записи</summary><ul>{item.diagnostics.map((d,k)=><li key={k}>{d}</li>)}</ul></details>}

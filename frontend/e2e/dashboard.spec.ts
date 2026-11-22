@@ -59,7 +59,7 @@ test('передача активного инцидента обновляет 
     await detail.getByRole('button',{name:'Передать команде'}).click();
     await expect(detail.locator('.record-label .pill')).toHaveText('Назначен команде');
     await expect(detail.locator('.facts')).toContainText('Сервис платежей');
-    await expect(detail.locator('.facts')).toContainText('Время назначения команде');
+    await expect(detail.getByRole('region',{name:'Даты инцидента'})).toContainText('У команды с');
     await expect(detail.locator('.facts')).not.toContainText('Следующий шаг');
     await expect(detail.getByRole('button',{name:'Назначить команду'})).toHaveCount(0);
     const log = detail.getByRole('region',{name:'История изменений'});
@@ -210,7 +210,8 @@ test('краткие карточки показывают команду и ж�
     await expect(page.getByRole('heading', {name: urgent.header, exact: true})).toBeVisible();
     const facts = page.locator('.facts');
     await expect(facts.getByText('Исполнитель', {exact: true}).locator('+ dd')).toHaveText(urgent.assignedEmployee);
-    await expect(facts.getByText('Плановый срок устранения', {exact: true}).locator('+ dd')).toHaveText(displayFormats().stamp(urgent.deadline));
+    const deadline = page.getByRole('region',{name:'Даты инцидента'}).getByText('Срок решения',{exact:true}).locator('+ dd time');
+    await expect(deadline).toHaveAttribute('title',displayFormats().stamp(urgent.deadline)+' МСК');
   } finally { await replace(original); }
 });
 
