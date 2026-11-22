@@ -39,7 +39,7 @@ export function DeadlineFocus({ entries, showingAll, onToggleAll }: {
             const sameMinute = choices.some(other => other !== entry && stamp(other.deadline) === fullDate);
             const date = dateFormat.format(entry.at);
             const description = [fullDate + ' ' + zoneLabel, entry.item.id, entry.item.productName,
-              entry.at < now && 'Просрочен'].filter(Boolean).join(' · ');
+              entry.at <= now && 'Просрочен'].filter(Boolean).join(' · ');
             return <button type="button" key={entry.item.id} aria-pressed={selected.item.id === entry.item.id}
               aria-label={description} title={description} onClick={() => setSelectedId(entry.item.id)}>
               <time dateTime={entry.deadline}>{time(entry.deadline)}</time>

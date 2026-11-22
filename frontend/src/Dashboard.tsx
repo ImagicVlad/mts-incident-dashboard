@@ -108,9 +108,8 @@ export function Dashboard() {
         const item=index.byId.get(key)?.item;
         return item && renderCard(item,id);
       })}
-      {!ids.length && <p className="queue-empty">{snapshot.counts[id]>0 && filtered
-        ? <>По выбранным условиям совпадений нет. <button className="filter-text" onClick={clearFilters}>Сбросить условия</button></>
-        : id==='history'?'Завершённых инцидентов пока нет.':'В этой категории нет инцидентов.'}</p>}</div>
+      {!ids.length && snapshot.counts[id]>0 && filtered &&
+        <p className="queue-empty">По выбранным условиям совпадений нет. <button className="filter-text" onClick={clearFilters}>Сбросить условия</button></p>}</div>
     </section>;
   };
   return <main className="container overview">

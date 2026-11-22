@@ -17,6 +17,7 @@ export interface Snapshot {
   epoch: string; snapshotVersion: number; serverTime: string; loadedAt: string | null;
   dataUpdatedAt: string | null; sourceStatus: 'ok' | 'error'; sourceError: string | null;
   hasSnapshot: boolean; demoMode: boolean; incidents: Incident[];
+  deadlineOrder: string[];
   groups: Record<GroupId, string[]>; counts: Record<GroupId, number>;
   notifications: Notice[]; diagnostics: string[];
 }
@@ -67,5 +68,6 @@ export function remaining(deadline: string | null, now: number) {
   const days = Math.floor(minutes / 1440), hours = Math.floor(minutes / 60) % 24, mins = minutes % 60;
   const clock = days ? days + ' дн.' : String(hours).padStart(2, '0') + ':' + String(mins).padStart(2,'0');
   const duration = days ? days + ' дн. ' + hours + ' ч' : (hours ? hours + ' ч ' : '') + mins + ' мин';
-  return {clock, text: delta < 0 ? 'Просрочен на ' + duration : 'Осталось ' + duration, overdue: delta < 0};
+  const text = delta === 0 ? 'Срок наступил' : delta < 0 ? 'Просрочен на ' + duration : 'Осталось ' + duration;
+  return {clock, text, overdue: delta <= 0};
 }

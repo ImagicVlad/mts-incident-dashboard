@@ -48,6 +48,29 @@ async function expectIncident(widget: Locator, id: string) {
   await expect(widget.locator('.deadline-incident h3 a')).toHaveAttribute('href', '/incidents/' + id);
 }
 
+test('чат получает ту же область поиска сроков, что и таймер', async ({page, source}) => {
+  const next = source.issue('SCOPE-NEXT', 10);
+  const late = source.issue('SCOPE-LATE', -5);
+  await source.update([next, late]);
+  await page.route('**/api/health', route => route.fulfill({json: {
+    status:'ok', aiConfigured:true, displayTimezone:'Europe/Moscow',
+  }}));
+  await page.route('**/api/ai/chat', route => route.fulfill({json: {
+    answer:'Проверено', epoch:'test', snapshotVersion:1, asOf:new Date().toISOString(), stale:false,
+  }}));
+  await login(page);
+  const widget = page.locator('.deadline-focus');
+  await expectIncident(widget, next.id);
+  await expect(page.getByText('В этой категории нет инцидентов.', {exact:true})).toHaveCount(0);
+  const search = page.getByRole('searchbox');
+  await search.fill(late.id);
+  await expectIncident(widget, late.id);
+  await page.getByRole('button', {name:'У какого инцидента ближайший срок?'}).click();
+  const request = page.waitForRequest('**/api/ai/chat');
+  await page.getByRole('button', {name:'Отправить сообщение'}).click();
+  expect((await request).postDataJSON().deadlineScope).toEqual([late.id]);
+});
+
 async function expectList(page: Page, ids: string[]) {
   const results = page.locator('.queue').getByTestId('deadline-results');
   await expect(results).toBeVisible();

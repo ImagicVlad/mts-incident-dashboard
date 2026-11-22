@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from watchfiles import awatch
 
-from .domain import OPEN, Incident, classify, critical_from, normalize_records, transitions, utc_string
+from .domain import OPEN, Incident, classify, critical_from, deadline_order, normalize_records, transitions, utc_string
 
 
 def utc_now() -> datetime:
@@ -48,10 +48,11 @@ class Store:
         self._task: asyncio.Task | None = None
 
     def snapshot(self) -> dict:
+        now = utc_now()
         return {
             "epoch": self.epoch,
             "snapshotVersion": self._version,
-            "serverTime": utc_string(utc_now()),
+            "serverTime": utc_string(now),
             "loadedAt": self._loaded_at,
             "dataUpdatedAt": self._updated_at,
             "sourceStatus": "error" if self._error else "ok",
@@ -59,6 +60,7 @@ class Store:
             "hasSnapshot": self._loaded_at is not None,
             "demoMode": self.demo,
             "incidents": self._rows,
+            "deadlineOrder": deadline_order(self._items, now),
             "groups": self._groups,
             "counts": {key: len(ids) for key, ids in self._groups.items()},
             "notifications": list(self._events),
@@ -120,12 +122,12 @@ class Store:
             critical_at = critical_from(item)
             if critical_at and critical_at > at:
                 thresholds.append(critical_at)
-            if item.stateEnum not in OPEN or not item.deadline or item.id in self._breached_ids:
+            if item.stateEnum not in OPEN or not item.deadline:
                 continue
             deadline = datetime.fromisoformat(item.deadline)
             if deadline > at:
                 thresholds.append(deadline)
-            else:
+            elif item.id not in self._breached_ids:
                 self._breached_ids.add(item.id)
                 if not initial:
                     events.append((item.id, "overdue", "Нарушен срок SLA"))

@@ -109,8 +109,8 @@ function matches(row:Row, s:Settings, term:string, now:number) {
     if (!active(row.item) || row.deadline===null) return false;
     const left = (row.deadline-now)/minute;
     if (s.sla==='overdue' || s.sla==='overdueRange') {
-      if (left>=0 || (s.sla==='overdueRange' && !inRange(-left,s.slaMin,s.slaMax))) return false;
-    } else if (left<0 || (s.sla==='remainingRange' ? !inRange(left,s.slaMin,s.slaMax) : s.sla!=='upcoming' && left>=Number(s.sla))) return false;
+      if (left>0 || (s.sla==='overdueRange' && !inRange(-left,s.slaMin,s.slaMax))) return false;
+    } else if (left<=0 || (s.sla==='remainingRange' ? !inRange(left,s.slaMin,s.slaMax) : s.sla!=='upcoming' && left>=Number(s.sla))) return false;
   }
   if (s.queueTime!=='any') {
     if (row.assignment===null || row.assignment>now) return false;
@@ -127,13 +127,13 @@ function sortValue(row:Row, field:SortField, now:number):string|number|null {
   switch (field) {
     case 'priority': return item.priorityId!==null && [1,2,3,4].includes(item.priorityId) ? item.priorityId : null;
     case 'deadline': return deadline;
-    case 'upcoming': return left!==null && left>=0 ? left : null;
-    case 'overdue': return left!==null && left<0 ? -left : null;
+    case 'upcoming': return left!==null && left>0 ? left : null;
+    case 'overdue': return left!==null && left<=0 ? -left : null;
     case 'queueAge': return row.assignment!==null && row.assignment<=now ? now-row.assignment : null;
     case 'created': return row.created;
     case 'status': return item.state || item.stateEnum || null;
     case 'urgency':
-      if (left!==null && left<0) return 0;
+      if (left!==null && left<=0) return 0;
       if (groups.has('critical')) return 1;
       if (groups.has('high')) return 2;
       if (active(item)) return groups.has('assigned') ? 3 : 4;
@@ -160,7 +160,12 @@ export function selectRows(index:Index, snapshot:Snapshot|undefined, settings:Se
   const rows = [...index.byId.values()].filter(row=>matches(row,settings,term,now));
   const scheduled = rows.filter((r): r is Row & {deadline:number; item:Incident & {deadline:string}} =>
     active(r.item) && r.deadline!==null && r.item.deadline!==null);
-  scheduled.sort((a,b)=>compareRows(a,b,nearestFirst,now));
+  if (snapshot?.deadlineOrder) {
+    const rank = new Map(snapshot.deadlineOrder.map((id, i) => [id, i]));
+    scheduled.sort((a,b) => rank.get(a.item.id)! - rank.get(b.item.id)!);
+  } else {
+    scheduled.sort((a,b)=>compareRows(a,b,nearestFirst,now));
+  }
   const deadlines: DeadlineEntry[] = scheduled.map(({item,deadline})=>({item,deadline:item.deadline,at:deadline}));
   const visible = settings.deadlineList ? scheduled : rows;
   const sort = settings.deadlineList?.sort ?? settings.sort;

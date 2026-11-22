@@ -307,3 +307,15 @@ def test_one_sla_breach_per_active_incident(tmp_path, monkeypatch):
     assert [(e["incidentId"], e["kind"]) for e in events] == [
         ("low", "overdue"), ("solved", "resolved"), ("research", "research"),
     ]
+
+
+def test_importing_archive_does_not_announce_a_resolution(tmp_path):
+    store = Store(tmp_path / "incidents.json", False)
+    store._accept(normalize_records([row("active")]))
+    archived = [row(state, stateEnum=state, completionDate="2025-05-12T08:45:00Z")
+                for state in ("Closed", "Resolved")]
+    store._accept(normalize_records([row("active"), *archived]))
+    assert set(store.snapshot()["groups"]["history"]) == {"Closed", "Resolved"}
+    assert store.snapshot()["notifications"] == []
+    store._accept(normalize_records([row("active", stateEnum="Resolved"), *archived]))
+    assert [(e["incidentId"], e["kind"]) for e in store.snapshot()["notifications"]] == [("active", "resolved")]

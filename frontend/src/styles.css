@@ -25,7 +25,7 @@ nav a svg, .focus-bottom a svg, .button svg { vertical-align: middle; }
 .waiting { padding-block: 48px; }
 .waiting h1 { font-size: clamp(2rem,4vw,3.5rem); }
 .waiting p, .waiting .button { margin-top: 18px; }
-.queue-empty { margin: 0; padding: 16px 18px; border: 1px dashed #ccd1d7; border-radius: 10px; }
+.queue-empty { margin: 0; }
 .source-details { margin: 0 0 40px; color: var(--muted); font-size: .86rem; }
 summary { cursor: pointer; }
 .paper-heading { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; }

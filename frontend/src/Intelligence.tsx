@@ -1,9 +1,10 @@
 import { useRef, useState, useEffect, useMemo, type ReactNode } from 'react';
 import { ArrowUp, RotateCw, Sparkles } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useMatch } from 'react-router-dom';
 import { api, errorText, pathFor, type Answer, type SummaryAnswer, type Message, type Incident } from './api';
 import { useLive } from './live';
 import { AssistantMessage } from './AssistantMessage';
+import { useViews } from './filters/ViewContext';
 
 function linkIncidentText(text: string, ids: string[]) {
   let tail = text;
@@ -35,6 +36,8 @@ function AnswerText({text}:{text:string}) {
 }
 export function Chat() {
   const {snapshot,aiConfigured:configured} = useLive();
+  const onDashboard = useMatch('/dashboard');
+  const {result} = useViews();
   const renderText = useAnswerTextRenderer();
   const [messages,setMessages] = useState<(Message & {source?:Answer})[]>([]);
   const [draft,setDraft] = useState('');
@@ -63,7 +66,9 @@ export function Chat() {
     const controller = new AbortController(); abort.current=controller;
     setMessages(next); setPending(true); setDraft(''); setError('');
     try {
-      const answer=await api<Answer>('ai/chat',{messages:next.slice(-7).map(({role,content})=>({role,content:content.slice(0,role==='user'?2000:4000)}))},controller.signal);
+      const deadlineScope = onDashboard && snapshot?.deadlineOrder && result.deadlines.length < snapshot.deadlineOrder.length
+        ? result.deadlines.map(entry => entry.item.id) : undefined;
+      const answer=await api<Answer>('ai/chat',{deadlineScope,messages:next.slice(-7).map(({role,content})=>({role,content:content.slice(0,role==='user'?2000:4000)}))},controller.signal);
       setMessages([...next,{role:'assistant',content:answer.answer,source:answer}]);
     } catch (err) {
       if (!controller.signal.aborted) {setMessages(previous);setError(errorText(err));setDraft(text);}

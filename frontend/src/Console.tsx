@@ -14,8 +14,9 @@ export default function Console({user}:{user:Account}) {
     <ViewProvider key={user.login} login={user.login}><Header user={user}/><LiveStatus/>
     <Suspense fallback={<main className="container waiting" role="status">Загружаем пульт…</main>}>
       <Outlet context={setChatDock}/>
-    </Suspense></ViewProvider>
+    </Suspense>
     <ChatWindow dock={chatDock}><Chat/></ChatWindow>
+    </ViewProvider>
     <Toasts/>
   </LiveProvider></MotionConfig>;
 }

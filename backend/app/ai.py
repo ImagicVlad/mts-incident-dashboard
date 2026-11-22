@@ -1,5 +1,6 @@
 import asyncio
 import json
+import math
 import re
 import time
 from collections import OrderedDict, deque
@@ -40,6 +41,7 @@ class Message(StrictInput):
 
 class ChatInput(StrictInput):
     messages: list[Message] = Field(min_length=1, max_length=9)
+    deadlineScope: set[str] | None = None
 
     @model_validator(mode="after")
     def validate_history(self):
@@ -85,11 +87,12 @@ def facts(row: dict, now: str, *, detailed: bool) -> dict:
     data["minutesUntilDeadline"] = None
     if row["stateEnum"] in ("Assigned", "WorkInProgress") and row.get("deadline"):
         remaining = datetime.fromisoformat(row["deadline"]) - datetime.fromisoformat(now)
-        data["minutesUntilDeadline"] = int(remaining.total_seconds() // 60)
+        seconds = remaining.total_seconds()
+        data["minutesUntilDeadline"] = math.ceil(seconds / 60) if seconds > 0 else math.floor(seconds / 60)
     return data
 
 
-def chat_context(snapshot: dict, messages: list[Message]) -> dict:
+def chat_context(snapshot: dict, messages: list[Message], deadline_scope: set[str] | None = None) -> dict:
     question = messages[-1].content.casefold()
     recent = " ".join(m.content for m in messages[-3:-1]).casefold()
     tokens = {s for s in re.findall(r"[\w-]+", question) if len(s) >= 3}
@@ -107,9 +110,12 @@ def chat_context(snapshot: dict, messages: list[Message]) -> dict:
                 minutes if minutes is not None else 0, row["id"])
 
     sorted_rows = sorted(records, key=rank)
-    nearest = min((row for row in records if row["minutesUntilDeadline"] is not None),
-                  key=lambda row: datetime.fromisoformat(row["deadline"]), default=None)
+    by_id = {row["id"]: row for row in records}
+    nearest = next((by_id[id_] for id_ in snapshot["deadlineOrder"]
+                    if deadline_scope is None or id_ in deadline_scope), None)
     return {"total": len(records), "counts": snapshot["counts"], "nearestDeadline": nearest,
+            "deadlineScope": "вся смена" if deadline_scope is None else "с учётом фильтров дашборда",
+            "deadlineRule": "Ближайший срок — nearestDeadline. Если он уже наступил, укажи просрочку и отсутствие предстоящих сроков в этом списке. Если null, активных записей со сроком в списке нет.",
             "selection": sorted_rows[:8],
             "groupsInSelection": {k: [row["id"] for row in sorted_rows[:8] if row["id"] in ids]
                                   for k, ids in groups.items()}}
@@ -181,7 +187,7 @@ class AIService:
 
     async def chat(self, body: ChatInput):
         snap = self.capture()
-        result = await self.request(snap, chat_context(snap, body.messages),
+        result = await self.request(snap, chat_context(snap, body.messages, body.deadlineScope),
                                     [message.model_dump() for message in body.messages])
         return self.mark_version(result)
 

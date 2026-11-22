@@ -1,6 +1,7 @@
 import asyncio
 import json
 import socket
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
@@ -8,7 +9,9 @@ import uvicorn
 from fastapi.testclient import TestClient
 
 from app.config import Settings
-from app.domain import COORDINATORS
+from app.ai import Message, chat_context
+from app.domain import COORDINATORS, normalize_records
+from app.store import Store
 from app.main import create_app
 
 CREDS = {"login": "operator", "password": "test-password"}
@@ -35,6 +38,33 @@ def sign_in(client):
     response = client.post("/api/auth/login", json=CREDS)
     assert response.status_code == 200
     return response
+
+
+def test_chat_and_dashboard_use_the_same_active_deadlines(tmp_path, monkeypatch):
+    now = datetime(2030, 1, 2, 12, tzinfo=UTC)
+    monkeypatch.setattr("app.store.utc_now", lambda: now)
+    store = Store(tmp_path / "incidents.json", False)
+    rows = [{**ROW, "id": id_, "deadline": (now + timedelta(seconds=seconds)).isoformat()}
+            for id_, seconds in [("old", -3600), ("fresh", -10), ("next", 61), ("later", 62)]]
+    store._accept(normalize_records([*rows, {**rows[2], "id": "done", "stateEnum": "Resolved"},
+                                     {**ROW, "id": "unknown", "deadline": None}]))
+    def check(order, minutes):
+        snap = store.snapshot()
+        assert snap["deadlineOrder"] == order
+        chat = chat_context(snap, [Message(role="user", content="Какой ближайший срок?")])
+        nearest = chat["nearestDeadline"]
+        if order:
+            assert (nearest["id"], nearest["minutesUntilDeadline"]) == (order[0], minutes)
+        else:
+            assert nearest is None
+    check(["next", "later", "fresh", "old"], 2)
+    question = [Message(role="user", content="Какой ближайший срок с фильтром?")]
+    assert chat_context(store.snapshot(), question, {"old", "fresh"})["nearestDeadline"]["id"] == "fresh"
+    assert chat_context(store.snapshot(), question, set())["nearestDeadline"] is None
+    now += timedelta(seconds=70)
+    check(["later", "next", "fresh", "old"], -1)
+    store._accept({})
+    check([], None)
 
 
 def test_session_and_read_api(source):

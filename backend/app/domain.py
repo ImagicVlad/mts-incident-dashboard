@@ -93,6 +93,7 @@ class Snapshot(BaseModel):
     hasSnapshot: bool
     demoMode: bool
     incidents: list[Incident]
+    deadlineOrder: list[str]
     groups: dict[str, list[str]]
     counts: dict[str, int]
     notifications: list[Notification]
@@ -262,6 +263,16 @@ def classify(items: dict[str, Incident], now: datetime | None = None) -> dict[st
     return groups
 
 
+def deadline_order(items: dict[str, Incident], now: datetime) -> list[str]:
+    """Upcoming deadlines first, then the most recently missed. Ties use the incident ID."""
+    ordering = []
+    for item in items.values():
+        if item.stateEnum in OPEN and item.deadline:
+            delta = datetime.fromisoformat(item.deadline) - now
+            ordering.append((delta.total_seconds() <= 0, abs(delta), item.id))
+    return [id_ for _, _, id_ in sorted(ordering)]
+
+
 def transitions(before: dict[str, Incident], after: dict[str, Incident],
                 now: datetime | None = None, previous_now: datetime | None = None):
     now = now or datetime.now(UTC)
@@ -272,7 +283,7 @@ def transitions(before: dict[str, Incident], after: dict[str, Incident],
         entered = current - previous
         if "review" in entered:
             yield id_, "research", "Инцидент перешёл в исследование"
-        if "history" in entered:
+        if "history" in entered and id_ in before:
             label = "Инцидент закрыт" if item.stateEnum == "Closed" else "Инцидент решён"
             yield id_, "resolved", label
         if {"critical", "assigned"} <= entered:

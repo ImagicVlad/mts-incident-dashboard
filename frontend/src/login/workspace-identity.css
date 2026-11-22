@@ -27,15 +27,45 @@
   font-size: clamp(.97rem, 1.3vw, 1.3rem);
   line-height: 1.48;
 }
-.workspace-routes { align-self: end; width: 100%; height: clamp(90px, 24vh, 300px); }
-.workspace-routes path { vector-effect: non-scaling-stroke; }
-.workspace-route-lines { stroke: #6f7374; stroke-width: 1.4px; }
-.workspace-route-active { stroke: #ff3553; stroke-width: 3px; stroke-dasharray: 24 110; stroke-dashoffset: -36; }
+.workspace-line { display: block; overflow: hidden; padding-bottom: .08em; margin-bottom: -.08em; }
+.workspace-line > span { display: block; }
+.workspace-routes { align-self: end; width: 100%; height: clamp(100px, 24vh, 300px); }
+.workspace-routes path, .workspace-routes circle { vector-effect: non-scaling-stroke; }
+.workspace-rails { stroke: #6b6e70; stroke-width: 1; }
+.workspace-selected { stroke: #c75a65; stroke-width: 1.5; }
+.workspace-packets { stroke: #ff566a; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 10 101; }
+.workspace-arrive { stroke-dashoffset: -74; }
+.workspace-leave { stroke-dashoffset: -30; }
+.workspace-junction { fill: #242628; stroke: #ff6375; stroke-width: 2; }
+.workspace-core { fill: #fff3ee; }
+.workspace-halo { stroke: #fc7584; opacity: .26; }
 @media (prefers-reduced-motion: no-preference) {
-  .workspace-route-active { animation: workspace-transfer 12s cubic-bezier(.38,.06,.28,1) -4s infinite; }
-  @keyframes workspace-transfer {
-    0% { stroke-dashoffset: 24; }
-    78%, 100% { stroke-dashoffset: -110; }
+  .workspace-line > span { animation: workspace-title-in .75s cubic-bezier(.2,.75,.18,1) backwards; }
+  .workspace-line + .workspace-line > span { animation-delay: .09s; }
+  .workspace-introduction p { animation: workspace-intro-in .6s ease-out .18s backwards; }
+  .workspace-arrive { animation: workspace-arrive 7s linear -1.25s infinite; }
+  .workspace-leave { animation: workspace-leave 7s linear -1.25s infinite; }
+  .workspace-halo { animation: workspace-handoff 7s ease-out -1.25s infinite; }
+  @keyframes workspace-title-in {
+    from { transform: translateY(105%); }
+    to { transform: translateY(0); }
+  }
+  @keyframes workspace-intro-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes workspace-arrive {
+    0% { stroke-dashoffset: 10; }
+    43%, 100% { stroke-dashoffset: -100; }
+  }
+  @keyframes workspace-leave {
+    0%, 42% { stroke-dashoffset: 10; }
+    86%, 100% { stroke-dashoffset: -100; }
+  }
+  @keyframes workspace-handoff {
+    0%, 36%, 66%, 100% { opacity: 0; transform: scale(.5); }
+    43% { opacity: .72; transform: scale(.62); }
+    64% { opacity: 0; transform: scale(1.65); }
   }
 }
 
@@ -53,8 +83,8 @@
   .workspace-introduction h2 { font-size: clamp(1.68rem, 5.8vw, 2.85rem); }
   .workspace-introduction p { display: none; }
   .workspace-routes {
-    position: absolute; z-index: -1; bottom: 0; right: -8%;
-    width: 39%; height: 48%; opacity: .8;
+    position: absolute; z-index: -1; bottom: 3%; right: -3%;
+    width: 37%; height: 50%; opacity: .9;
   }
 }
 @media (min-width: 761px) and (max-height: 570px) {

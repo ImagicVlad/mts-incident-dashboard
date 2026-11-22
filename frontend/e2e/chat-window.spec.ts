@@ -61,7 +61,16 @@ test('открепление, перемещение, размеры и восс
   await button('Восстановить чат').click();
   expect(await bounds(chat)).toEqual(resized);
   await button('Развернуть чат').click();
-  expect(await bounds(chat)).toEqual({x: 0, y: 0, width: screen.w, height: screen.h});
+  const banner = page.getByRole('banner');
+  const headerBottom = (await bounds(banner)).height;
+  expect(await bounds(chat)).toEqual({x: 0, y: headerBottom, width: screen.w, height: screen.h - headerBottom});
+  await banner.getByRole('button', {name: /^Оповещения/}).click();
+  await expect(page.getByRole('dialog', {name: 'Оповещения'})).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.setViewportSize({width: 390, height: 760});
+  await expect.poll(async () => (await bounds(chat)).y).toBe((await bounds(banner)).height);
+  await expect.poll(async () => {const r = await bounds(chat); return r.y + r.height;}).toBe(760);
+  await page.setViewportSize({width: 1280, height: 840});
   await expect(button('Изменить размер окна')).toHaveCount(0);
   await drag(page, chat.locator('header'), 100, 75);
   expect((await bounds(chat)).x).toBe(0);

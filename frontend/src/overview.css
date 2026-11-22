@@ -87,7 +87,7 @@
   button.chat-stars:hover { background: #dad4ec; }
   .chat-dock, .chat-host { display: contents; }
   .incident-chat[hidden] { display: none; }
-  .chat-floating { position: fixed; z-index: 70; box-shadow: 0 10px 35px #31294029, 0 2px 6px #31294012; }
+  .chat-floating { position: fixed; z-index: 55; box-shadow: 0 10px 35px #31294029, 0 2px 6px #31294012; }
   .chat-floating .chat-titlebar { padding: 8px 10px 8px 12px; min-height: 46px; user-select: none; touch-action: none; }
   .chat-floating:not([data-mode="maximized"]) .chat-titlebar { cursor: grab; }
   .chat-floating:not([data-mode="maximized"]) .chat-titlebar:active { cursor: grabbing; }
@@ -97,7 +97,7 @@
   .chat-controls button:hover, .chat-resize:hover { background: #e7e4f3; }
   .chat-controls button:last-child:hover { color: #ab1730; background: #f7e1e6; }
   .chat-controls svg { width: 15px; height: 15px; }
-  .chat-floating[data-mode="maximized"] { border-radius: 0; }
+  .chat-floating[data-mode="maximized"] { z-index: 19; border-radius: 0; }
   .chat-floating[data-mode="minimized"] > :not(.chat-titlebar) { display: none; }
   .chat-floating[data-mode="minimized"] .chat-titlebar { height: 100%; border: 0; }
   .chat-resize { position: absolute; right: 0; bottom: 0; width: 17px; height: 17px; border-radius: 4px; color: #817997; cursor: nwse-resize; touch-action: none; }

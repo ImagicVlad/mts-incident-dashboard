@@ -26,6 +26,8 @@ test('срочные события всплывают один раз, прос
     ]);
     await bell.click();
     await page.keyboard.press('Escape');
+    await page.getByRole('button', {name: 'Открепить ИИ-чат'}).click();
+    await page.getByRole('button', {name: 'Развернуть чат'}).click();
     Object.assign(issue, {priorityId: 4, assignedGroupName: 'КЦ ИТ Координаторы Массовых Инцидентов'});
     await publish();
     await expect(toast).toHaveCount(1);

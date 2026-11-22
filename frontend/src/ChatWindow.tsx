@@ -11,10 +11,11 @@ type ChatWindowState =
   | { mode: 'floating' | 'maximized'; normal: Rect }
   | { mode: 'minimized'; normal: Rect; position: Point; restore: 'floating' | 'maximized' };
 
-function viewport(): Size {
+function viewport() {
   return {
     width: document.documentElement.clientWidth,
     height: Math.min(document.documentElement.clientHeight, window.visualViewport?.height ?? window.innerHeight),
+    headerHeight: document.querySelector('.dashboard-bar')?.getBoundingClientRect().height ?? 0,
   };
 }
 
@@ -72,9 +73,13 @@ export function ChatWindow({dock, children}: {dock: HTMLElement | null; children
     if (!floating) return;
     const update = () => setScreen(viewport());
     update();
+    const header = document.querySelector('.dashboard-bar');
+    const observer = new ResizeObserver(update);
+    if (header) observer.observe(header);
     window.addEventListener('resize', update);
     window.visualViewport?.addEventListener('resize', update);
     return () => {
+      observer.disconnect();
       window.removeEventListener('resize', update);
       window.visualViewport?.removeEventListener('resize', update);
     };
@@ -125,7 +130,9 @@ export function ChatWindow({dock, children}: {dock: HTMLElement | null; children
   let style: CSSProperties | undefined;
   if (windowState.mode === 'minimized') style = {width: miniWidth, height: miniHeight,
     left: clamp(windowState.position.left, 0, screen.width - miniWidth), top: clamp(windowState.position.top, 0, screen.height - miniHeight)};
-  else if (mode === 'maximized') style = {left: 0, top: 0, ...screen};
+  else if (mode === 'maximized') style = {
+    left: 0, top: screen.headerHeight, width: screen.width, height: Math.max(0, screen.height - screen.headerHeight),
+  };
   else style = bounds;
 
   return createPortal(<section ref={panel} hidden={mode === 'closed'} className={'incident-chat' + (floating ? ' chat-floating' : '')}
